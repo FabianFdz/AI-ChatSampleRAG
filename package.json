@@ -1,0 +1,14 @@
+{
+  "name": "ai-chat-rag",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RAG chat application with LangChain and LangGraph",
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r run build",
+    "start": "pnpm -r run start"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}
