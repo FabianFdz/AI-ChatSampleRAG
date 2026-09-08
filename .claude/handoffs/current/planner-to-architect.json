@@ -1,0 +1,13 @@
+{
+  "sprint": 1,
+  "from": "planner",
+  "to": "architect",
+  "status": "approved",
+  "timestamp": "2026-09-08T22:37:28Z",
+  "payload": {
+    "epic": "E1",
+    "sprint": 1,
+    "tickets": ["E1-T01", "E1-T02", "E1-T03"],
+    "planPath": ".claude/handoffs/current/plan.md"
+  }
+}
