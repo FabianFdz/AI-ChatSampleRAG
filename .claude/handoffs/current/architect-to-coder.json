@@ -1,0 +1,11 @@
+{
+  "sprint": 1,
+  "from": "architect",
+  "to": "coder",
+  "status": "approved",
+  "timestamp": "2026-09-08T22:48:23Z",
+  "payload": {
+    "tickets": ["E1-T01", "E1-T02", "E1-T03"],
+    "designPath": ".claude/handoffs/current/design.md"
+  }
+}
