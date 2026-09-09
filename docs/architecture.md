@@ -27,8 +27,9 @@ documents what actually exists in the repo today.
   ([ADR-9](adr/ADR-9.md)).
 - **PDF extraction:** `pdf-parse` v2's `PDFParse` class API
   ([ADR-10](adr/ADR-10.md)).
-- **RAG orchestration dependencies** (LangGraph, OpenAI) are deliberately not
-  installed yet — added in E3 when first used ([ADR-6](adr/ADR-6.md)).
+- **RAG orchestration dependencies** (LangGraph, `@langchain/anthropic`,
+  Voyage AI) are deliberately not installed yet — added in E3 when first used
+  ([ADR-6](adr/ADR-6.md)).
 
 ## Backend request flow
 
@@ -184,9 +185,10 @@ for the full list; the ones most likely to bite:
 - **`Chunk` is our own type, not LangChain's `Document`.** E3 converts at the
   embedding boundary, in one place, so LangChain's untyped metadata stays
   contained (ADR-9).
-- **`@langchain/core@^1.2.9` is now pinned.** E3 adds `@langchain/langgraph`
-  and `@langchain/openai` at compatible versions, never the `langchain`
-  meta-package.
+- **`@langchain/core@^1.2.9` is now pinned.** E3 adds `@langchain/langgraph`,
+  `@langchain/anthropic` (`ChatAnthropic`, for Claude LLM calls through
+  LangGraph), and a Voyage AI client (embeddings — Claude has no embeddings
+  endpoint) at compatible versions, never the `langchain` meta-package.
 - **Chunk size/overlap (1000/200) are fixed constants and overlap is an upper
   bound, not a guarantee** (ADR-9) — no overlap across a PDF page boundary
   (ADR-11). If E3 sees poor retrieval quality or answers cut off at page

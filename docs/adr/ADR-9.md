@@ -77,7 +77,8 @@ and tests must assert overlap only on a fixture with no blank lines (see
   148 KB.
 - **Do not** add the `langchain` meta-package (ADR-6's table lists it
   speculatively). `@langchain/textsplitters` + `@langchain/core` is the whole
-  need; E3 adds `@langchain/langgraph` and `@langchain/openai` itself.
+  need; E3 adds `@langchain/langgraph`, `@langchain/anthropic` (Claude), and
+  a Voyage AI client (embeddings) itself.
 - Chunk size/overlap stay hard-coded constants, not env config (plan defers
   tuning to E3). `js-tiktoken` is already present via `core`, so switching to
   token-based sizing later costs no new dependency.

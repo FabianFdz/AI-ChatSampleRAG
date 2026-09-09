@@ -6,8 +6,9 @@
 
 ## Context
 E1 asks "port configuration for development vs. production?" and requires
-`PORT` to be configurable from `.env`. Later epics add `OPENAI_API_KEY`,
-model names, chunk sizes — all read from the environment. The failure mode to
+`PORT` to be configurable from `.env`. Later epics add `ANTHROPIC_API_KEY`,
+`VOYAGE_API_KEY`, model names, chunk sizes — all read from the environment.
+The failure mode to
 avoid is `process.env.PORT` (typed `string | undefined`) being read ad hoc
 across the codebase, with `undefined` or `NaN` discovered at request time
 rather than at boot.
@@ -33,9 +34,10 @@ with three variables; a schema library is not yet earning its dependency.
   server silently listening on a random port.
 - `.env` is gitignored; `.env.example` is committed and is the documented
   contract for what must be set.
-- Later epics add variables in exactly one place. When `OPENAI_API_KEY`
-  arrives in E3 it becomes a *required* variable, and the fail-fast behaviour
-  means a missing key breaks at startup instead of on the first chat message.
+- Later epics add variables in exactly one place. When `ANTHROPIC_API_KEY`
+  and `VOYAGE_API_KEY` arrive in E3 they become *required* variables, and the
+  fail-fast behaviour means a missing key breaks at startup instead of on the
+  first chat message.
 - Revisit `zod` when the variable count passes ~8 or values need coercion
   beyond string/number/enum.
 

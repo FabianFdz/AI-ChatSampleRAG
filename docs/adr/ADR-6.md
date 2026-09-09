@@ -51,3 +51,13 @@ against the registry at that time:
   Unblocks the install, but pins LangChain/LangGraph/OpenAI versions months
   before the code that uses them is written, and installs a heavy dependency
   tree that E1 never touches.
+
+## Amendment (2026-09-08)
+The LLM provider decision changed from OpenAI to Anthropic Claude (recorded
+in `CLAUDE.md`). The `openai` row in the table above is superseded: E3 adds
+`@langchain/anthropic` (`ChatAnthropic`, for the LLM through LangGraph) and a
+Voyage AI client for embeddings (Claude has no embeddings endpoint) instead
+of `openai` / `@langchain/openai`. The rest of this ADR's decision and
+reasoning (remove speculative deps, add each back in the epic that first
+uses it, verify names/versions against the registry at that time) is
+unaffected.

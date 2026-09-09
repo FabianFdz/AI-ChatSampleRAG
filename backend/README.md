@@ -15,8 +15,8 @@ Other scripts: `pnpm build` (tsc → `dist/`), `pnpm start` (runs the build),
 ## Key Dependencies
 - Express 5 (HTTP server)
 - pino / pino-http (structured logging)
-- LangChain / LangGraph / pdf-parse / OpenAI — added in later epics (see
-  `docs/adr/ADR-6.md`), not installed yet.
+- LangChain / LangGraph / pdf-parse / `@langchain/anthropic` / Voyage AI —
+  added in later epics (see `docs/adr/ADR-6.md`), not installed yet.
 
 ## API Endpoints
 See CLAUDE.md for full endpoint specifications.

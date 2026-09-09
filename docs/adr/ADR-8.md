@@ -61,7 +61,7 @@ cannot change this.
 - No built-in module mocking comparable to `vi.mock`. `node:test` offers
   `mock.fn()` and `t.mock.method()`, which cover mocking a method on an
   injected object — enough given that services are framework-free and receive
-  their collaborators (cross-sprint flag 7). **E3's LangChain/OpenAI work must
+  their collaborators (cross-sprint flag 7). **E3's LangChain/Claude work must
   inject its LLM client rather than rely on module interception.** If
   module-level mocking becomes genuinely unavoidable, revisit this ADR — do not
   add a second runner alongside it.

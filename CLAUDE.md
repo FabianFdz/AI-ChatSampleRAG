@@ -9,7 +9,8 @@ A Proof-of-Concept RAG (Retrieval-Augmented Generation) application where users 
 - **Frontend:** Next.js (React) with TypeScript
 - **Backend:** Node.js/Express with TypeScript
 - **RAG Engine:** LangChain + LangGraph
-- **LLM:** OpenAI API (or configurable)
+- **LLM:** Anthropic Claude API
+- **Embeddings:** Voyage AI (Anthropic's recommended embeddings partner — Claude itself has no embeddings endpoint)
 - **Storage:** In-memory (PoC - no persistence)
 - **API:** REST endpoints
 
@@ -86,6 +87,7 @@ ai-chat-rag/
 - ✅ Session-based chat
 - ✅ LangChain + LangGraph for RAG
 - ✅ Unit tests required for backend tickets going forward (2026-09-09), superseding the earlier "no tests" PoC note below
+- ✅ LLM switched from OpenAI to Anthropic Claude API (2026-09-08); embeddings use Voyage AI since Claude has no embeddings endpoint — supersedes the "OpenAI API" line this file used to have and the OpenAI mentions in E3's scope
 
 ### If New Decisions Needed
 - Ask before implementing

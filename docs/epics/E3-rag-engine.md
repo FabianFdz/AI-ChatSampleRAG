@@ -5,13 +5,13 @@ Semantic search and retrieval-augmented generation system with stateful conversa
 
 ## Scope
 Core RAG intelligence layer:
-- OpenAI embeddings integration for semantic search
+- Voyage AI embeddings integration for semantic search (Claude has no embeddings endpoint)
 - In-memory vector store (LanceDB) for document indexing
 - LangGraph workflow orchestration (Retrieve → Format → Prompt → LLM)
 - Session-based context management
 - Chat history storage and retrieval
 - Relevance ranking and filtering of retrieved chunks
-- Streaming response support for LLM outputs
+- Streaming response support for LLM outputs (Claude API)
 
 ## Depends on
 E2 (Document Processing Pipeline)
@@ -21,7 +21,7 @@ must-have
 
 ## To settle
 - Vector DB: LanceDB vs. alternatives (Pinecone, Weaviate)?
-- Embedding model: OpenAI vs. open-source alternatives?
+- Voyage embedding model: `voyage-3` vs. `voyage-3-lite` vs. domain-specific variants?
 - Context window management for long conversations?
 - Multi-turn conversation strategy?
 
