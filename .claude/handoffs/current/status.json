@@ -30,10 +30,10 @@
       "code": "done",
       "codeReview": "approved",
       "status": "done",
-      "merged": "pending"
+      "merged": "done"
     }
   },
   "docsUpdated": "pending",
   "sprintStatus": "in_progress",
-  "updatedAt": "2026-09-09T03:25:45Z"
+  "updatedAt": "2026-09-08T03:34:00Z"
 }
