@@ -3,7 +3,7 @@
 | ID | Title | Status | Priority | Depends on | File |
 |-----|-------|--------|----------|-----------|------|
 | E1 | Backend Foundation | done | must-have | — | [E1-backend-foundation.md](E1-backend-foundation.md) |
-| E2 | Document Processing Pipeline | planning | must-have | E1 | [E2-document-processing-pipeline.md](E2-document-processing-pipeline.md) |
+| E2 | Document Processing Pipeline | done | must-have | E1 | [E2-document-processing-pipeline.md](E2-document-processing-pipeline.md) |
 | E3 | RAG Engine (LangChain + LangGraph) | pending | must-have | E2 | [E3-rag-engine.md](E3-rag-engine.md) |
 | E4 | Backend API Endpoints | pending | must-have | E1, E3 | [E4-backend-api-endpoints.md](E4-backend-api-endpoints.md) |
 | E5 | Frontend Setup | pending | must-have | — | [E5-frontend-setup.md](E5-frontend-setup.md) |
@@ -37,8 +37,8 @@ E5 (Frontend Setup)
 ## Progress Summary
 
 - **Total Epics:** 8
-- **Completed:** 1
-- **In Progress:** 1
+- **Completed:** 2
+- **In Progress:** 0
 - **Pending:** 6
 - **Blocked:** 0
 
