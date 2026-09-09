@@ -20,9 +20,9 @@
     },
     "E2-T03": {
       "design": "done",
-      "code": "pending",
-      "codeReview": "pending",
-      "status": "pending",
+      "code": "done",
+      "codeReview": "approved",
+      "status": "done",
       "merged": "pending"
     },
     "E2-T04": {
