@@ -2,13 +2,13 @@
   "sprint": 1,
   "plan": "done",
   "designPr": "https://github.com/FabianFdz/ai-chat-rag/pull/2",
-  "designMerged": "pending",
+  "designMerged": "done",
   "tickets": {
     "E1-T01": {
       "design": "done",
-      "code": "pending",
-      "codeReview": "pending",
-      "status": "pending",
+      "code": "done",
+      "codeReview": "approved",
+      "status": "done",
       "merged": "pending"
     },
     "E1-T02": {
@@ -28,5 +28,5 @@
   },
   "docsUpdated": "pending",
   "sprintStatus": "in_progress",
-  "updatedAt": "2026-09-08T22:49:12Z"
+  "updatedAt": "2026-09-08T23:51:53Z"
 }

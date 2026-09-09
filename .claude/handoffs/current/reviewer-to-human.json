@@ -1,0 +1,11 @@
+{
+  "sprint": 1,
+  "from": "reviewer",
+  "to": "human",
+  "status": "approved",
+  "timestamp": "2026-09-08T23:51:53Z",
+  "payload": {
+    "ticket": "E1-T01",
+    "prs": ["https://github.com/FabianFdz/ai-chat-rag/pull/3"]
+  }
+}
