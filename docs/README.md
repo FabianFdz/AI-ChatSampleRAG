@@ -12,8 +12,12 @@ work from.
   error handling, modular route/service structure, and unit test coverage are
   all shipped and merged. See
   [`docs/sprint-history/sprint-1.md`](sprint-history/sprint-1.md).
-- Everything else (document processing, RAG engine, API endpoints, frontend)
-  is still `pending`/`planning` — see
+- **E2 — Document Processing Pipeline: done.** Plain text and PDF ingestion,
+  LangChain-based chunking, and chunk validation are shipped and merged behind
+  one pipeline entry point (`processPastedText` / `processFile`). See
+  [`docs/sprint-history/sprint-2.md`](sprint-history/sprint-2.md).
+- Everything else (RAG engine, API endpoints, frontend) is still
+  `pending`/`planning` — see
   [`docs/epics/epic-status.md`](epics/epic-status.md) for the live dashboard.
 
 ## Repo layout

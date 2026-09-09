@@ -1,8 +1,8 @@
 # Architecture
 
-Last updated: Sprint 1 (E1 — Backend Foundation). Frontend and RAG pieces
-described in `CLAUDE.md` are not built yet; this file documents what actually
-exists in the repo today.
+Last updated: Sprint 2 (E2 — Document Processing Pipeline). Frontend and the
+RAG engine (E3+) described in `CLAUDE.md` are not built yet; this file
+documents what actually exists in the repo today.
 
 ## Stack (backend, as built)
 
@@ -21,9 +21,14 @@ exists in the repo today.
 - **Testing:** Node's built-in `node:test`, loaded through `tsx`, zero new
   dependencies ([ADR-8](adr/ADR-8.md)). Mandatory for backend tickets from
   E1-T04 onward ([ADR-7](adr/ADR-7.md)).
-- **RAG dependencies** (LangChain, LangGraph, pdf-parse, OpenAI) are
-  deliberately not installed yet — added in E2/E3 when first used
-  ([ADR-6](adr/ADR-6.md)).
+- **Document chunking:** LangChain's `RecursiveCharacterTextSplitter`
+  (`@langchain/textsplitters` + `@langchain/core`), `splitText` only, our own
+  typed `Chunk` shape rather than LangChain's `Document`
+  ([ADR-9](adr/ADR-9.md)).
+- **PDF extraction:** `pdf-parse` v2's `PDFParse` class API
+  ([ADR-10](adr/ADR-10.md)).
+- **RAG orchestration dependencies** (LangGraph, OpenAI) are deliberately not
+  installed yet — added in E3 when first used ([ADR-6](adr/ADR-6.md)).
 
 ## Backend request flow
 
@@ -69,9 +74,9 @@ requestLogger  →  express.json()  →  routes registry  →  notFoundHandler  
   the request-scoped child logger.
 - **`src/errors/AppError.ts`** — `statusCode` + `code` (SCREAMING_SNAKE_CASE)
   + `isOperational`, with `badRequest` / `notFound` / `internal` factories.
-- **`src/services/`** — established as an empty, framework-free layer (no
-  `express` imports, no `req`/`res`) for future business logic; it signals
-  failure by throwing `AppError`. Empty until E2.
+- **`src/services/`** — a framework-free layer (no `express` imports, no
+  `req`/`res`) for business logic; it signals failure by throwing `AppError`.
+  Holds the document processing pipeline as of E2 (below).
 
 ### Error envelope
 
@@ -82,6 +87,61 @@ Every non-2xx response, present and future, uses this shape:
 `details` is omitted when absent. Codes introduced so far: `NOT_FOUND`,
 `INVALID_JSON`, `INTERNAL_ERROR`. Later epics add codes, never a new response
 shape (`AppError` is the only way to produce an error response).
+
+## Document processing pipeline (E2)
+
+No HTTP surface yet — this is a framework-free service layer in
+`src/services/`, called directly by tests today and by E4's upload route
+later. Two entry points are the only things a caller should ever use:
+
+- **`processPastedText(text)`** and **`processFile({ filename, content, mimeType? })`**
+  (`documentPipeline.service.ts`) — each resolves to a `ProcessedDocument`
+  (`{ document, chunks }`). They wrap ingest → chunk → validate as one
+  sequence, so validation can never be skipped and a mid-pipeline failure can
+  only surface as a rejected promise (never a partial result). `processFile`
+  routes on the lower-cased filename extension first, falling back to MIME
+  type only when the extension is absent/unrecognised: `.pdf`/PDF MIME → the
+  PDF path; `.txt`/`.md`/any `text/*` MIME → the text path; anything else →
+  `UNSUPPORTED_FILE_TYPE` (415).
+- **`ingestText(input)`** (`textIngestion.service.ts`, sync) — normalizes
+  pasted text or a `.txt` file's bytes into a `NormalizedDocument`: strips a
+  BOM, normalizes line endings to LF, trims, and rejects empty/whitespace-only
+  input. Also exports `normalizeText`, reused per-page by PDF ingestion.
+- **`ingestPdf(input)`** (`pdfIngestion.service.ts`, async) — extracts text via
+  `pdf-parse` v2 (`PDFParse` class, `getText()`), one segment per PDF page
+  (page-free pages kept, never dropped), into the same `NormalizedDocument`
+  shape.
+- **`chunkDocument(document)`** (`chunking.service.ts`, async) — splits each
+  document *segment* independently with LangChain's
+  `RecursiveCharacterTextSplitter` (1000 chars / 200 overlap, an upper bound —
+  see ADR-9), producing a document-wide contiguous list of `Chunk`s. Page
+  attribution comes from the segment, never from inspecting chunk text.
+- **`validateChunks(documentId, chunks)`** (`chunkValidation.service.ts`,
+  sync) — throws on a metadata/invariant violation (our own bug, not user
+  input), filters empty/whitespace-only chunks, and renumbers survivors so a
+  chunk's `index` always equals its position in the returned array.
+
+**Shared shapes** (`document.types.ts`) — `NormalizedDocument` (`id`, `title`,
+`sourceType`: `'pasted-text' | 'text-file' | 'pdf'`, ordered `segments`, full
+`text` for display only, `pageCount`, `charCount`, `uploadedAt`) and `Chunk`
+(`id`, `documentId`, `index`, `text`, `metadata`). A `DocumentSegment` is one
+page's text plus its 1-based `pageNumber` (`null` for non-PDF sources — never
+a synthetic page 1). Chunking always reads `segments`, never `document.text`
+(ADR-11) — this is what keeps page attribution exact without offset
+bookkeeping. All shapes are plain JSON-serialisable data (no classes, no
+`Buffer`, no `Date`), so E4 can return them from a route unmapped.
+
+**New `AppError` codes** (`documentErrors.ts`, one factory per code):
+`EMPTY_DOCUMENT` (400), `DOCUMENT_TOO_LARGE` (413, cap is
+`DOCUMENT_PROCESSING.maxDocumentBytes` = 10MB), `UNSUPPORTED_FILE_TYPE` (415),
+`PDF_PARSE_FAILED` (400, underlying pdfjs error logged, only its `name`
+crosses the boundary), `CHUNK_VALIDATION_FAILED` (500),
+`DOCUMENT_PROCESSING_FAILED` (500, generic non-`AppError` wrapper). All render
+through the existing ADR-5 error envelope — no new response shape.
+
+See [ADR-9](adr/ADR-9.md) (chunking library/strategy), [ADR-10](adr/ADR-10.md)
+(pdf-parse v2 API) and [ADR-11](adr/ADR-11.md) (segment-based document model)
+for the full reasoning.
 
 ## Testing
 
@@ -101,9 +161,9 @@ shape (`AppError` is the only way to produce an error response).
 
 ## Known constraints for future epics
 
-See `design.md`'s "Cross-sprint flags" (archived at
-`.claude/handoffs/sprint-1/design.md`) for the full list; the ones most
-likely to bite:
+See sprint 1's and sprint 2's `design.md` "Cross-sprint flags" (archived at
+`.claude/handoffs/sprint-1/design.md` and `.claude/handoffs/sprint-2/design.md`)
+for the full list; the ones most likely to bite:
 - Express 5 path syntax only (no `'*'`, wildcards are `/*splat`).
 - Relative imports need a `.js` extension even though files are `.ts`
   (`NodeNext` module resolution).
@@ -113,11 +173,33 @@ likely to bite:
   booting an HTTP server.
 - `node:test` has no `vi.mock`-style module interception; later epics that
   need to swap out a collaborator (e.g. E3's LLM client) must inject it.
+- **E4 must call only `processPastedText`/`processFile`**, never `ingestPdf`
+  + `chunkDocument` by hand — validation is wired into the pipeline and
+  bypassing it bypasses the ticket's acceptance criteria.
+- **E4's upload middleware must import `DOCUMENT_PROCESSING.maxDocumentBytes`**
+  rather than re-typing 10MB, so an oversized upload is rejected before being
+  fully buffered in memory.
+- **`pageNumber` is `number | null`** everywhere (E3 retrieval/citations, E6
+  UI) — pasted/plain text has no pages; never default it to page 1.
+- **`Chunk` is our own type, not LangChain's `Document`.** E3 converts at the
+  embedding boundary, in one place, so LangChain's untyped metadata stays
+  contained (ADR-9).
+- **`@langchain/core@^1.2.9` is now pinned.** E3 adds `@langchain/langgraph`
+  and `@langchain/openai` at compatible versions, never the `langchain`
+  meta-package.
+- **Chunk size/overlap (1000/200) are fixed constants and overlap is an upper
+  bound, not a guarantee** (ADR-9) — no overlap across a PDF page boundary
+  (ADR-11). If E3 sees poor retrieval quality or answers cut off at page
+  breaks, the fix is a design change to `DOCUMENT_PROCESSING`, not a prompt
+  tweak.
+- **`pdf-parse` pulls a native binary** (`@napi-rs/canvas`). Confirm
+  `pnpm install` succeeds on any new CI/container architecture; `unpdf` is the
+  verified fallback (ADR-10).
 
 ## Not built yet
 
-- Document upload/parsing, chunking, embeddings (E2)
-- LangChain/LangGraph RAG orchestration (E3)
-- `/api/session*` endpoints (E4)
+- Embeddings, vector search, LangGraph RAG orchestration (E3)
+- `/api/session*` endpoints, including document upload HTTP wiring and the
+  three-documents-per-session rule (E4)
 - Frontend — onboarding + chat UI (E5–E7)
 - Integration/E2E testing (E8)
