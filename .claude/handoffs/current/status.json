@@ -1,7 +1,7 @@
 {
   "sprint": 2,
   "plan": "done",
-  "designPr": null,
+  "designPr": "https://github.com/FabianFdz/ai-chat-rag/pull/10",
   "designMerged": "pending",
   "tickets": {
     "E2-T01": {
