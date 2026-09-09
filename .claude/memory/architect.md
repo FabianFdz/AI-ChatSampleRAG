@@ -42,6 +42,27 @@
   that implements them.** A testing mandate, a review rule or a dependency
   policy is a durable "why" that outlives the sprint; the ticket section in
   `design.md` is just the "how" for one Coder run.
+- **Measure the library behaviour an AC assumes before writing the AC into a
+  design.** Plan text like "~200-character overlap" or "chunks of 1000 chars"
+  describes an *intent*; the library delivers something more specific.
+  `RecursiveCharacterTextSplitter` gives ~197 chars of overlap inside a
+  paragraph and **0** across a `\n\n` boundary, and returns `[]` for empty
+  input — so a test written from the plan's wording fails against correct code,
+  and a "filter empty chunks" branch is unreachable end-to-end. Run the real
+  package on real fixtures, put the measured table in the ADR, and tell the
+  Reviewer which literal reading of the AC not to enforce.
+- **A scaffolded library name may be a different package by the time you use
+  it.** ADR-6 deferred `pdf-parse` to E2; by then v2 was a full rewrite (class
+  API, per-page results, ESM, bundled types) and every tutorial and most
+  training data still shows v1's `pdfParse(buffer)`. Check the major version
+  and its `exports`/`.d.ts`, then say in the design which API shape is wrong,
+  so the Coder recognises a v1 snippet as a defect.
+- **Decide how metadata survives a transformation, don't leave it to the
+  Coder.** Splitters/parsers return bare strings, so page/offset provenance is
+  lost unless the design fixes the carrier (here: per-page `segments` chunked
+  independently). Also check whether adopting the library's own container type
+  costs `any` — LangChain's `Document.metadata` is `Record<string, any>`, which
+  is enough reason to keep a project-owned type and convert at the boundary.
 - **A ticket added mid-sprint gets a second design PR cut from `main`.** Do not
   branch off the in-flight ticket branch (its code would land in the design
   PR) and do not re-open earlier ticket designs. Expect a small `status.json`
