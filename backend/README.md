@@ -20,3 +20,15 @@ Other scripts: `pnpm build` (tsc → `dist/`), `pnpm start` (runs the build),
 
 ## API Endpoints
 See CLAUDE.md for full endpoint specifications.
+
+## Structure
+- **`routes/`** parse/validate input and shape HTTP responses. One
+  `*.route.ts` file per feature, exporting a default `Router`, wired into
+  `routes/index.ts` (the route registry) — `app.ts` and the error-handling
+  middleware are never touched to add a route.
+- **`services/`** hold business logic. They are framework-free — never
+  import `express`, never see `req`/`res` — and signal failure by throwing
+  `AppError` (`src/errors/AppError.ts`), not by returning error objects.
+- Errors thrown anywhere in a route or service reach the centralized error
+  handler (`src/middleware/errorHandler.ts`) automatically; do not `try/catch`
+  and format responses locally.
