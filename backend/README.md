@@ -21,6 +21,18 @@ Other scripts: `pnpm build` (tsc → `dist/`), `pnpm start` (runs the build),
 ## API Endpoints
 See CLAUDE.md for full endpoint specifications.
 
+## Testing
+```sh
+pnpm test        # node:test via tsx, tests/**/*.test.ts
+pnpm typecheck    # tsc -p tsconfig.test.json (covers src + tests)
+```
+Tests live in `tests/`, mirroring `src/` one-to-one. Assertions use
+`node:assert/strict` (`assert.equal`, `assert.deepEqual`, `assert.throws`
+— **not** `expect`); there is no jest/vitest global in this project
+(see [ADR-8](../docs/adr/ADR-8.md)). Every backend ticket ships its tests in
+the same PR as its code, from this sprint onward
+(see [ADR-7](../docs/adr/ADR-7.md)).
+
 ## Structure
 - **`routes/`** parse/validate input and shape HTTP responses. One
   `*.route.ts` file per feature, exporting a default `Router`, wired into
