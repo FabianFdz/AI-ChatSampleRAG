@@ -1,0 +1,11 @@
+{
+  "sprint": 2,
+  "from": "human",
+  "to": "documenter",
+  "status": "approved",
+  "timestamp": "2026-09-08T03:35:00Z",
+  "payload": {
+    "tickets": ["E2-T01", "E2-T02", "E2-T03", "E2-T04"],
+    "note": "All four sprint-2 tickets designed, coded, reviewed, and merged, delivering Epic E2 (Document Processing Pipeline): plain text ingestion, PDF text extraction, chunking (LangChain RecursiveCharacterTextSplitter per ADR-9), and chunk validation with a single documentPipeline entry point. E2-T02 and E2-T03 were coded and reviewed in parallel in separate git worktrees once E2-T01 (shared types/errors) merged, since they only depend on E2-T01 and not each other; E2-T04 depended on all three and was coded sequentially afterward, split into two stacked PRs (chunkValidation.service.ts, then documentPipeline.service.ts) per design.md's own line-count guidance. New ADRs: ADR-9 (chunking library/strategy), ADR-10 (pdf-parse v2 API), ADR-11 (per-page segment metadata model)."
+  }
+}
