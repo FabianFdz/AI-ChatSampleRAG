@@ -1,12 +1,11 @@
 import { createApp } from './app.js';
 import { env } from './config/env.js';
+import { logger } from './utils/logger.js';
 
 const app = createApp();
 
 const server = app.listen(env.PORT, () => {
-  // Plain console.log is acceptable here only until T03 introduces the
-  // logger (ADR-4), which replaces this line.
-  console.log(`Server listening on port ${env.PORT}`);
+  logger.info(`Server listening on port ${env.PORT}`);
 });
 
 function shutdown(): void {
@@ -17,3 +16,13 @@ function shutdown(): void {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+process.on('unhandledRejection', (reason) => {
+  logger.error({ err: reason }, 'Unhandled promise rejection');
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error({ err }, 'Uncaught exception');
+  process.exit(1);
+});
