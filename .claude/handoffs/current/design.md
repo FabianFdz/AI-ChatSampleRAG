@@ -1,11 +1,14 @@
-# Sprint 1 Design — tickets E1-T01, E1-T02, E1-T03
+# Sprint 1 Design — tickets E1-T01, E1-T02, E1-T03, E1-T04
 
 ## Tickets in Scope
 - **E1-T01** — Express Server Bootstrap
 - **E1-T02** — Health Check Endpoint
 - **E1-T03** — Global Error Handling & Modular Route/Service Structure
+- **E1-T04** — Unit Test Coverage for Backend Foundation *(added mid-sprint,
+  designed after T01/T02 merged and T03 was in review)*
 
-Build them in that order; each assumes the previous is merged.
+Build them in that order; each assumes the previous is merged. T04 is
+tests-only and changes no behaviour from T01–T03.
 
 ## ADRs produced
 | ADR | Decision |
@@ -16,8 +19,10 @@ Build them in that order; each assumes the previous is merged.
 | [ADR-4](../../../docs/adr/ADR-4.md) | `pino` + `pino-http` structured logging |
 | [ADR-5](../../../docs/adr/ADR-5.md) | `AppError` + one JSON error envelope |
 | [ADR-6](../../../docs/adr/ADR-6.md) | Defer unused RAG dependencies to E2/E3 |
+| [ADR-7](../../../docs/adr/ADR-7.md) | **Process:** unit tests required for backend tickets going forward |
+| [ADR-8](../../../docs/adr/ADR-8.md) | Backend tests run on `node:test` + `tsx`, zero new dependencies |
 
-## Rules that apply to all three tickets
+## Rules that apply to all four tickets
 1. **Relative imports end in `.js`** — `import { env } from './config/env.js'`
    even though the file is `env.ts`. Required by `NodeNext` (ADR-2). Getting
    this wrong breaks `pnpm start` while `pnpm dev` still works, so it will not
@@ -27,6 +32,9 @@ Build them in that order; each assumes the previous is merged.
 4. **No `console.*`** in application code; use the logger (ADR-4).
 5. Do not add packages beyond those listed per ticket. Do not add `cors`,
    `helmet`, `zod`, or a rate limiter this sprint — see *Cross-sprint flags*.
+6. Rules 1–4 apply to **test files too**: `.js` extensions on relative imports
+   into `src/`, no `any`, no `@ts-ignore`, no `!`. Tests are typechecked
+   (T04) — a test file is not an escape hatch from `strict`.
 
 ## Technical Approach
 
@@ -48,9 +56,17 @@ backend/
 │   │   ├── health.route.ts         # T02
 │   │   └── dev.route.ts            # T03 — dev-only, verifies error handling
 │   └── services/.gitkeep           # T03 — layer established, empty until E2
+├── tests/                          # T04 — mirrors src/, never emitted to dist/
+│   ├── helpers/testServer.ts       # T04 — listen(0) + fetch helper
+│   ├── config/env.test.ts          # T04 — covers T01
+│   ├── app.test.ts                 # T04 — covers T02 + T03 wiring
+│   ├── errors/AppError.test.ts     # T04 — covers T03
+│   └── middleware/
+│       └── errorHandler.test.ts    # T04 — covers T03
 ├── .env.example                    # T01 (committed)
 ├── tsconfig.json                   # T01
-└── package.json                    # T01
+├── tsconfig.test.json              # T04 — typechecks src + tests, noEmit
+└── package.json                    # T01, `test` script added in T04
 .gitignore                          # T01 (repo root — does not exist yet)
 ```
 
@@ -253,6 +269,162 @@ Estimated diff: ~200 lines. If it runs past ~250, split as T03a (logger +
 `AppError` + errorHandler + notFound) and T03b (dev routes + services layer +
 README + process handlers) per the CONTRACT's reviewability rule.
 
+---
+
+### E1-T04 — Unit Test Coverage for Backend Foundation
+
+**Prerequisite: E1-T03 must be merged first.** Two of the four test files
+import middleware that only exists on T03's branch.
+
+This ticket adds tests and test tooling. It changes **no** runtime behaviour and
+touches exactly **one** file under `src/` (a pure seam in `env.ts`, specified
+below). If the Coder finds it needs any other `src/` change to make something
+testable, STOP and flag it in `questions.md` rather than reshaping T01–T03 code.
+
+**Runner: `node:test` run through the already-installed `tsx` (ADR-8). Zero new
+dependencies.** `package.json` script changes:
+```json
+"test": "NODE_ENV=test LOG_LEVEL=silent node --import tsx --test \"tests/**/*.test.ts\"",
+"typecheck": "tsc -p tsconfig.test.json"
+```
+`build` stays `tsc` (emits `src` only). The new `typecheck` is a superset of the
+old `tsc --noEmit` — it covers `src` *and* `tests` with `noEmit`.
+
+`NODE_ENV=test` and `LOG_LEVEL=silent` in the script are load-bearing, not
+cosmetic: `test` keeps `pino-pretty`'s worker transport out of the test process
+and keeps `/__dev/*` unmounted, `silent` keeps the intentional 4xx/5xx logs off
+the test output. `dotenv` never overrides an already-set variable, so a
+developer's local `.env` cannot break this.
+
+**`backend/tsconfig.test.json`** (new):
+```json
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": "." },
+  "include": ["src", "tests"]
+}
+```
+`rootDir: "."` is required — without it `tests/` sits outside the base
+`rootDir: "src"` and `tsc` rejects it.
+
+**The one `src/` change — a pure seam in `src/config/env.ts`.** `env` is built
+at import time from `process.env`, so it cannot be exercised with different
+values. Extract the existing logic (unchanged) into one exported pure function:
+```ts
+export function loadEnv(source: NodeJS.ProcessEnv): Env   // reads only `source`
+export const env: Env = loadEnv(process.env)
+```
+Keep `import 'dotenv/config'` as the first statement, keep the three `parse*`
+helpers private and their error messages verbatim, and keep `Object.freeze`
+(now inside `loadEnv`). `loadEnv` must not read `process.env` itself. Import-time
+behaviour is identical: same defaults, same fail-fast throw (ADR-3 holds).
+
+**`tests/helpers/testServer.ts`** — the whole HTTP story, ~20 lines, no
+`supertest`:
+```ts
+startTestServer(app: Express): Promise<{ url: string; close: () => Promise<void> }>
+```
+`app.listen(0)`, await the `listening` event, narrow `server.address()` (it is
+`string | AddressInfo | null` — `strict` forces this), return
+`http://127.0.0.1:${port}` and a promisified `server.close()`. Call it in
+`before` and always `await close()` in `after` — a leaked listener makes
+`node --test` hang instead of failing.
+
+#### Covers E1-T01 — `tests/config/env.test.ts` (pure, no HTTP)
+- `loadEnv({})` → `PORT: 3001`, `NODE_ENV: 'development'`, `LOG_LEVEL: 'info'`,
+  `isDevelopment: true`.
+- `loadEnv({ PORT: '4000' })` → `PORT` is the **number** `4000` — this is the
+  AC's "`PORT` env override".
+- `loadEnv({ PORT: '' })` → `3001` (empty string means unset).
+- Invalid `PORT` — `'abc'`, `'0'`, `'65536'`, `'3001.5'`, `'-1'` — each
+  `assert.throws(..., /Invalid PORT/)`.
+- `NODE_ENV: 'production'` and `'test'` → `isDevelopment: false`;
+  `'staging'` throws `/Invalid NODE_ENV/`.
+- `LOG_LEVEL: 'silent'` accepted; `'verbose'` throws `/Invalid LOG_LEVEL/`.
+- Result is frozen: `Object.isFrozen(...) === true`.
+- Smoke: the real `env` export imports cleanly and `typeof env.PORT === 'number'`.
+
+#### Covers E1-T02 + T03 wiring — `tests/app.test.ts` (real `createApp()`)
+One server per file, started in `before` on port 0.
+- `GET /health` → `200`; `content-type` includes `application/json`.
+- Body key set is **exactly** `['service', 'status', 'timestamp', 'uptime']`
+  (compare sorted `Object.keys`) — so adding *or* dropping a field fails the
+  test. `status === 'ok'`, `service === 'ai-chat-rag-backend'`,
+  `typeof uptime === 'number'`, and `timestamp` round-trips:
+  `new Date(body.timestamp).toISOString() === body.timestamp`.
+- Two sequential `GET /health` both `200` — the AC's "works immediately, no
+  dependency on other features". A genuine cold-start race is process-level and
+  belongs to E8 (see *Out of scope*).
+- `GET /does-not-exist` → `404`, `error.code === 'NOT_FOUND'`, `error.message`
+  contains `GET /does-not-exist`, `error.requestId` is a non-empty string, and
+  the raw response text contains no `stack`.
+- `DELETE /health` (known path, unknown method) → `404 NOT_FOUND` — proves the
+  terminal handler catches more than a mistyped path.
+- `POST /health` with `content-type: application/json` and body `'{bad'` →
+  `400`, `error.code === 'INVALID_JSON'`, and the body parses as JSON (not
+  Express's default HTML error page).
+- `x-powered-by` response header is absent.
+- `GET /__dev/boom` → `404`, proving the dev routes are env-gated and never
+  reachable outside `development`.
+
+#### Covers E1-T03 — `tests/middleware/errorHandler.test.ts` (harness app)
+`errorHandler` needs `req.log`/`req.id` from `requestLogger`, and the dev
+throwing routes are unmounted at `NODE_ENV=test`. So this file builds a minimal
+app from the **real** middleware in the **real** order —
+`requestLogger → express.json() → test routes → notFoundHandler → errorHandler`
+— and registers its own throwing routes plus one `GET /ok`. (The real app's
+ordering is separately proven by `app.test.ts`'s 404 and `INVALID_JSON` cases.)
+- Sync `throw new Error('boom: leaked secret')` → `500`,
+  `code INTERNAL_ERROR`, message exactly `'An unexpected error occurred'`, and
+  the raw text does **not** contain `'leaked secret'` or a stack frame — ADR-5's
+  "logged, never returned, in every environment".
+- `async` handler that `await`s then throws → the same `500` envelope, and the
+  request *resolves* rather than hanging (the ADR-1 Express 5 guarantee).
+- Route throwing `AppError.badRequest('bad thing', { field: 'x' })` → `400`,
+  `code BAD_REQUEST`, message passed through, `details` deep-equal to
+  `{ field: 'x' }`.
+- Route calling `next(AppError.notFound('nope'))` → `404` and the `details` key
+  is **absent** from the envelope (the conditional spread).
+- Route throwing a non-`Error` (`throw 'plain string'`) → still the generic
+  `500` envelope, no crash.
+- `headersSent`: a route that sends a `200` and *then* throws → the sent
+  response is not rewritten into an error envelope. Keep this assertion narrow;
+  if it proves flaky, assert only that the following request still succeeds.
+- Final `GET /ok` → `200`, after all the above — the "server stays running" AC.
+
+#### Covers E1-T03 — `tests/errors/AppError.test.ts`
+Each factory (`badRequest` / `notFound` / `internal`) sets the right
+`statusCode` + `code`, preserves `message`, leaves `details` `undefined` unless
+passed, and every instance has `isOperational === true`, `name === 'AppError'`,
+`instanceof Error`, and a string `stack`.
+
+**`backend/README.md`** — add a short `## Testing` section: `pnpm test`, tests
+live in `tests/` mirroring `src/`, assertions are `node:assert/strict`
+(`assert.equal`, **not** `expect`), and every backend ticket ships tests from
+now on (link ADR-7 and ADR-8).
+
+**Out of scope for T04 — flag for E8 (testing epic):**
+- Spawning `src/index.ts` as a child process to assert it binds the real
+  `env.PORT`, logs the startup line, and exits cleanly on `SIGINT`/`SIGTERM`,
+  plus the `unhandledRejection` / `uncaughtException` → `exit(1)` handlers.
+  Those are process-level tests, not unit tests.
+- Asserting log *output*. pino is silenced here. If a later ticket must assert
+  logging, inject a pino instance with a custom destination — never parse stdout.
+- Exercising `/__dev/*` under real `NODE_ENV=development` (it would spawn a
+  `pino-pretty` worker); the harness covers the identical code path.
+- Coverage tooling or a percentage threshold — deliberately none (ADR-7).
+
+**Verify:** `pnpm --filter backend test` → all pass, exit code 0, and the
+process **exits** (a hang means a socket was not closed);
+`pnpm --filter backend typecheck` clean; `pnpm --filter backend build` then
+confirm `dist/` contains no `tests/`; temporarily change health's `status` to
+`'up'` → health test fails; temporarily remove `app.use(notFoundHandler)` →
+404 tests fail; revert both.
+
+Estimated diff: ~200 lines (~170 test code, ~10 in `env.ts`, the rest config,
+scripts and README). If it runs past ~250, split as T04a (tooling + `env` +
+`AppError` tests) and T04b (`app` + `errorHandler` tests).
+
 ## Data / Schema Changes
 None. No persistence layer this sprint (in-memory only, per `CLAUDE.md`), and
 no in-memory stores yet either — session state arrives in E4.
@@ -274,9 +446,16 @@ no in-memory stores yet either — session state arrives in E4.
 `details` omitted unless present. `code` values introduced this sprint:
 `NOT_FOUND`, `INVALID_JSON`, `INTERNAL_ERROR`.
 
+**E1-T04 changes no HTTP surface at all** — no new route, no new status code, no
+change to the envelope. Its only interface addition is the internal `loadEnv`
+export below.
+
 **Internal interfaces later epics build on:**
 - `createApp(): Express` — `src/app.ts`
 - `env` (frozen, typed) + `isDevelopment` — `src/config/env.ts`
+- `loadEnv(source: NodeJS.ProcessEnv): Env` — `src/config/env.ts` (T04; pure,
+  for tests. Application code keeps importing `env`, never calls `loadEnv`.)
+- `startTestServer(app)` — `tests/helpers/testServer.ts` (T04; test-only)
 - `logger` — `src/utils/logger.ts`; `req.log` inside requests
 - `AppError` + `.badRequest()` / `.notFound()` / `.internal()` — `src/errors/AppError.ts`
 - Route registry — `src/routes/index.ts`
@@ -311,3 +490,24 @@ Decisions here that constrain later sprints — read before starting E2+.
 8. **Rate limiting stays deferred** (plan's Out of Scope). Revisit when the
    OpenAI key is live in E3 — an unauthenticated PoC endpoint that spends money
    per request is the point where this stops being premature.
+9. **Tests are part of every backend ticket's Definition of Done from now on
+   (ADR-7).** E2/E3/E4 tickets ship their test files in the *same* PR as the
+   code, under `backend/tests/` following T04's layout, and the Reviewer treats
+   a missing test as a finding. Plan estimates should assume roughly +30–60
+   lines of tests for a typical route or service. Frontend policy is unchanged
+   (no tests required); E5+ needs its own ADR for that.
+10. **One test runner: `node:test` + `tsx` (ADR-8).** Do not add vitest, jest,
+    chai, or `supertest` in a later epic. Assertions are `node:assert/strict`
+    (`assert.equal`, not `expect`). There is no `vi.mock` equivalent, so
+    **E3 must inject its LLM/LangChain client** (constructor or factory
+    argument) instead of relying on module interception — decide that in E3's
+    design, not while writing its tests.
+11. **Testability is now a design constraint.** Anything read at import time
+    (`process.env`, the clock, a network client) must also be reachable through
+    a pure, injectable seam — as `loadEnv` now is for `env`. Designing an E2/E3
+    module that can only be exercised by booting the whole app is a design bug
+    under ADR-7.
+12. **E8 is narrowed, not cancelled.** Per-ticket unit tests now cover route and
+    service behaviour, so E8 owns what they cannot: process-level tests
+    (real port binding, signal shutdown, `uncaughtException` exit), and full
+    upload → chunk → retrieve → answer integration/E2E flows.

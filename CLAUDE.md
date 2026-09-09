@@ -85,6 +85,7 @@ ai-chat-rag/
 - ✅ In-memory storage
 - ✅ Session-based chat
 - ✅ LangChain + LangGraph for RAG
+- ✅ Unit tests required for backend tickets going forward (2026-09-09), superseding the earlier "no tests" PoC note below
 
 ### If New Decisions Needed
 - Ask before implementing
@@ -96,7 +97,8 @@ ai-chat-rag/
 
 ## Testing
 - Manual testing via frontend
-- No tests required yet (PoC)
+- Unit tests required for backend tickets (decided 2026-09-09) — cover each ticket's core logic/acceptance criteria; pick a minimal test setup consistent with the backend TypeScript stack (e.g. vitest or Node's built-in test runner) unless a ticket's design already specifies one
+- No frontend tests required yet (PoC)
 
 ---
 Created for Fabián Fdz with help from Juanito 🤖
