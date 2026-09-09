@@ -7,8 +7,8 @@
     "E2-T01": {
       "design": "done",
       "code": "done",
-      "codeReview": "pending",
-      "status": "pending",
+      "codeReview": "approved",
+      "status": "done",
       "merged": "pending"
     },
     "E2-T02": {
@@ -35,5 +35,5 @@
   },
   "docsUpdated": "pending",
   "sprintStatus": "in_progress",
-  "updatedAt": "2026-09-09T02:15:11Z"
+  "updatedAt": "2026-09-09T02:21:19Z"
 }
