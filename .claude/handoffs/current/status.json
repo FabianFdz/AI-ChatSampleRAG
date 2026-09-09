@@ -1,7 +1,7 @@
 {
   "sprint": 1,
   "plan": "done",
-  "designPr": "PENDING_URL",
+  "designPr": "https://github.com/FabianFdz/ai-chat-rag/pull/7",
   "designMerged": "pending",
   "tickets": {
     "E1-T01": {
