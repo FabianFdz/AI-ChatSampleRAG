@@ -1,0 +1,14 @@
+{
+  "sprint": 2,
+  "from": "planner",
+  "to": "architect",
+  "status": "approved",
+  "timestamp": "2026-09-08T00:00:00Z",
+  "payload": {
+    "epic": "E2",
+    "sprint": 2,
+    "tickets": ["E2-T01", "E2-T02", "E2-T03", "E2-T04"],
+    "planPath": ".claude/handoffs/current/plan.md",
+    "notes": "E2 (Document Processing Pipeline) depends only on E1, which is done. All four tickets belong to sprint 2 as one coherent increment: E2-T01 (plain text ingestion) and E2-T02 (PDF extraction) both produce a normalized document shape; E2-T03 (chunking) consumes that shape; E2-T04 (chunk validation/quality checks) wraps the pipeline end-to-end. Unlike sprint 1, the unit-test policy (CLAUDE.md 'Testing' section, ADR-7/ADR-8) was already in effect when this sprint was planned, so test coverage is written into each ticket's own acceptance criteria and E2E flows directly — there is no separate test-catchup ticket this sprint. These tickets cover service-layer processing only; no HTTP routes are wired yet (that's E4's scope), so E2E flows are framed from the developer/integrator's perspective, consistent with how E1's foundational tickets were framed."
+  }
+}

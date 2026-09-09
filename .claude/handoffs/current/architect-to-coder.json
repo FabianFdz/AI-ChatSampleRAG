@@ -1,0 +1,13 @@
+{
+  "sprint": 2,
+  "from": "architect",
+  "to": "coder",
+  "status": "approved",
+  "timestamp": "2026-09-09T01:54:49Z",
+  "payload": {
+    "tickets": ["E2-T01", "E2-T02", "E2-T03", "E2-T04"],
+    "designPath": ".claude/handoffs/current/design.md",
+    "adrs": ["docs/adr/ADR-9.md", "docs/adr/ADR-10.md", "docs/adr/ADR-11.md"],
+    "notes": "Build strictly in order T01 -> T02 -> T03 -> T04; each assumes the previous is merged, and T01 defines the shared types (document.types.ts) and error factories (errors/documentErrors.ts) the others extend. Service layer only: do not touch src/app.ts, src/routes/* or the middleware stack — HTTP wiring is E4. Read ADR-9 before writing E2-T03's overlap test: chunkOverlap is an upper bound, measured 197 chars inside a paragraph and 0 across a '\\n\\n' boundary, so overlap may only be asserted on a fixture with no blank lines. Read ADR-10 before writing E2-T02: it is pdf-parse v2's `new PDFParse({ data }).getText()` class API with `await parser.destroy()` in a finally — the `pdfParse(buffer)` default-export style in most tutorials is v1 and will not work here. Dependencies are added in the ticket that first imports them: T02 adds pdf-parse@^2.4.5, T03 adds @langchain/textsplitters@^1.0.1 plus @langchain/core@^1.2.9 (explicit, not a hoisted peer); T01 and T04 add none. Tests ship in the same PR as the code (ADR-7) on node:test + node:assert/strict (ADR-8); design.md lists exactly what each ticket's tests must assert. E2-T02 needs two committed PDF fixtures generated outside the repo — do not add a PDF-authoring dependency and do not commit a 10MB fixture. If any ticket needs a decision design.md does not make, STOP and write to questions.md."
+  }
+}
