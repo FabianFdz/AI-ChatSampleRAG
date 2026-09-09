@@ -3,9 +3,10 @@
   "from": "coder",
   "to": "reviewer",
   "status": "approved",
-  "timestamp": "2026-09-09T00:04:48Z",
+  "timestamp": "2026-09-09T00:37:48Z",
   "payload": {
-    "ticket": "E1-T02",
-    "prs": ["https://github.com/FabianFdz/ai-chat-rag/pull/5"]
+    "ticket": "E1-T03",
+    "prs": ["https://github.com/FabianFdz/ai-chat-rag/pull/6"],
+    "notes": "Folded a status.json bookkeeping fix into this PR (E1-T02 marked merged, per CONTRACT.md's PR-hygiene rule for tracker fixes). Note for the human/Reviewer: a mid-task instruction to add unit tests for this ticket was given and then explicitly retracted before any test code was written — no test files exist in this PR, scope is unchanged from the original design. The user has since decided a separate dedicated ticket (with an Architect ADR) will cover unit tests for E1-T01/T02/T03; that ticket (E1-T04) already appears pending in status.json, added by another agent process, not by this invocation."
   }
 }
