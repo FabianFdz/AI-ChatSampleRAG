@@ -65,13 +65,17 @@ function parseLogLevel(raw: string | undefined): LogLevel {
   return raw as LogLevel;
 }
 
-const PORT = parsePort(process.env.PORT);
-const NODE_ENV = parseNodeEnv(process.env.NODE_ENV);
-const LOG_LEVEL = parseLogLevel(process.env.LOG_LEVEL);
+export function loadEnv(source: NodeJS.ProcessEnv): Env {
+  const PORT = parsePort(source.PORT);
+  const NODE_ENV = parseNodeEnv(source.NODE_ENV);
+  const LOG_LEVEL = parseLogLevel(source.LOG_LEVEL);
 
-export const env: Env = Object.freeze({
-  PORT,
-  NODE_ENV,
-  LOG_LEVEL,
-  isDevelopment: NODE_ENV === 'development',
-});
+  return Object.freeze({
+    PORT,
+    NODE_ENV,
+    LOG_LEVEL,
+    isDevelopment: NODE_ENV === 'development',
+  });
+}
+
+export const env: Env = loadEnv(process.env);
