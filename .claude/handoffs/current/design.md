@@ -22,21 +22,31 @@ Everything asserted about these libraries below was measured against the real
 packages (Node 24, pnpm 11.21, `tsc` 5.9, `@types/node@20`) before the design
 was written. Where a number appears, it came from a run, not from docs.
 
+**This document describes *what* to build and *why*. It deliberately contains
+no implementation code — the Coder owns every line of that.** Field names,
+type names, function names, exported symbols, error codes and library API names
+are prescriptive; how they are expressed in TypeScript is the Coder's call,
+within the rules below.
+
 ## Rules that apply to all four tickets
-1. **Relative imports end in `.js`** — `import { AppError } from '../errors/AppError.js'`
-   even though the file is `.ts` (ADR-2). Wrong extensions break `pnpm start`
-   while `pnpm dev` keeps working, so the dev server will not catch it.
+1. **Relative imports end in `.js`** even though the files are `.ts` (ADR-2) —
+   e.g. an import of `AppError` resolves to `../errors/AppError.js`. Wrong
+   extensions break `pnpm start` while `pnpm dev` keeps working, so the dev
+   server will not catch it.
 2. **No `any`**, no `@ts-ignore`, no non-null `!`. `strict` and
-   `noUncheckedIndexedAccess` are on — prefer `.map()` / `for…of` over indexing.
+   `noUncheckedIndexedAccess` are on — prefer mapping and iteration over
+   indexing into arrays.
 3. **Services are framework-free** (sprint-1 flag 7): never import `express`,
-   never see `req`/`res`. Importing `utils/logger.js` and `errors/*` is fine.
+   never see `req`/`res`. Importing the shared logger and the error modules is
+   fine.
 4. **No `console.*`** — use the logger (ADR-4).
 5. **Failure is signalled by throwing an `AppError` with a new `code`**
    (ADR-5, sprint-1 flag 4). No new response shapes, no `Result`/`Either` type
    — see *Why there is no Result type* under E2-T04.
 6. **Tests ship in the same PR as the code** (ADR-7), under `backend/tests/`
-   mirroring `src/`, on `node:test` + `node:assert/strict` (ADR-8 — `assert.equal`,
-   never `expect`; no vitest, no supertest). Rules 1–4 apply to test files too.
+   mirroring `src/`, on Node's built-in test runner with `node:assert/strict`
+   (ADR-8 — the `assert.equal` family, never `expect`; no vitest, no
+   supertest). Rules 1–4 apply to test files too.
 7. Add **only** the dependencies listed per ticket, in the ticket that first
    imports them (ADR-6).
 
@@ -75,75 +85,90 @@ types module per service family; it may also export frozen constants.
 
 ### Shared shapes (E2-T01 defines them; ADR-11 explains why)
 
-`src/services/document.types.ts`:
-```ts
-export type DocumentSourceType = 'pasted-text' | 'text-file' | 'pdf';
+All of these live in `src/services/document.types.ts`. Everything is plain,
+JSON-serialisable data — no classes, no `Buffer`, no `Date` instances — so E4
+can return it from a route without a mapping layer. None of it is
+env-configurable (the plan defers tuning).
 
-export interface DocumentSegment {
-  pageNumber: number | null;   // PDF page (1-based); null for text sources
-  text: string;
-}
+**`DocumentSourceType`** — a union of three string literals:
+`'pasted-text'`, `'text-file'`, `'pdf'`.
 
-export interface NormalizedDocument {
-  id: string;                  // randomUUID()
-  title: string;               // filename, or 'pasted-text'
-  sourceType: DocumentSourceType;
-  segments: DocumentSegment[]; // chunking input — PDF: one per page, in order
-  text: string;                // full text; display/preview only, NEVER chunked
-  pageCount: number | null;    // PDF page total; null for text sources
-  charCount: number;           // text.length
-  uploadedAt: string;          // new Date().toISOString()
-}
+**`DocumentSegment`** — one unit of source text that shares a single page
+attribution. This is the unit the chunker splits.
 
-export interface ChunkMetadata {
-  source: string;              // = document.title
-  sourceType: DocumentSourceType;
-  pageNumber: number | null;
-  uploadedAt: string;
-}
+| Field | Type | Purpose |
+|---|---|---|
+| `pageNumber` | number (1-based) or `null` | The PDF page this text came from; `null` for text sources, which have no pages. Never a synthetic `1`. |
+| `text` | string | The segment's normalised text. May be empty (a PDF page with no extractable text). |
 
-export interface Chunk {
-  id: string;                  // `${documentId}#${index}`
-  documentId: string;
-  index: number;               // 0-based, document-wide, contiguous
-  text: string;
-  metadata: ChunkMetadata;
-}
+**`NormalizedDocument`** — the single shape both E2-T01 and E2-T02 produce.
 
-export interface ProcessedDocument {   // T04's pipeline return value
-  document: NormalizedDocument;
-  chunks: Chunk[];
-}
+| Field | Type | Purpose |
+|---|---|---|
+| `id` | string, non-empty (a random UUID) | Identity for the document; every chunk references it. |
+| `title` | string, non-empty | The uploaded filename, or the literal pasted-text label for pasted input. Surfaces in chunk metadata and in the UI. |
+| `sourceType` | `DocumentSourceType` | Which ingestion path produced this. |
+| `segments` | array of `DocumentSegment`, ordered, at least one | **The chunking input.** PDF: exactly one entry per page, in page order. Text: exactly one entry. |
+| `text` | string, non-empty | The full text. For **display/preview and API responses only — never chunked** (ADR-11). |
+| `pageCount` | number or `null` | The PDF's page total; `null` for text sources. When non-null it always equals `segments.length`. |
+| `charCount` | number | Length of `text`, so callers need not recompute it. |
+| `uploadedAt` | string (ISO-8601, UTC) | Upload timestamp; copied into every chunk's metadata. |
 
-export const DOCUMENT_PROCESSING = Object.freeze({
-  maxDocumentBytes: 10 * 1024 * 1024,  // 10MB (plan AC)
-  chunkSize: 1000,
-  chunkOverlap: 200,
-  pastedTextTitle: 'pasted-text',
-});
-```
-All of it is plain JSON-serialisable data — no classes, no `Buffer`, no `Date`
-— so E4 can return it from a route unmapped. These are **not** env-configurable
-(plan defers tuning).
+**`ChunkMetadata`** — the source attribution carried by every chunk.
+
+| Field | Type | Purpose |
+|---|---|---|
+| `source` | string, non-empty | The document's `title` — filename or pasted-text label. |
+| `sourceType` | `DocumentSourceType` | Copied from the document. |
+| `pageNumber` | number or `null` | Copied from the **segment** the chunk came from, never inferred from the chunk text. |
+| `uploadedAt` | string (ISO-8601) | Copied from the document. |
+
+**`Chunk`** — one embeddable unit.
+
+| Field | Type | Purpose |
+|---|---|---|
+| `id` | string, non-empty | Stable chunk identity, derived from the document id and the chunk index joined by a `#` (e.g. `<uuid>#3`). |
+| `documentId` | string, non-empty | The owning document's `id`. |
+| `index` | integer ≥ 0 | Position within the document, **document-wide and contiguous** — after validation, a chunk's `index` always equals its position in the returned array. |
+| `text` | string, non-empty after validation | The chunk content, never longer than the configured chunk size. |
+| `metadata` | `ChunkMetadata` | Source attribution (above). |
+
+**`ProcessedDocument`** — E2-T04's pipeline return value: two fields,
+`document` (a `NormalizedDocument`) and `chunks` (an array of validated
+`Chunk`s).
+
+**`DOCUMENT_PROCESSING`** — one frozen constants object, the single place these
+numbers exist:
+
+| Key | Value | Meaning |
+|---|---|---|
+| `maxDocumentBytes` | 10 MB, expressed as 10 × 1024 × 1024 | Plan AC's size cap, enforced on bytes. |
+| `chunkSize` | 1000 | ADR-9 splitter chunk size, in characters. |
+| `chunkOverlap` | 200 | ADR-9 splitter overlap budget — an upper bound, see E2-T03. |
+| `pastedTextTitle` | the literal `pasted-text` | `title` used when there is no filename. |
 
 ### Error vocabulary added this sprint
 
-`src/errors/documentErrors.ts` — one exported factory per code, each returning
-`new AppError(...)`. Keeping them in one module is what stops the code
-vocabulary from drifting across four services.
+`src/errors/documentErrors.ts` — one exported factory function per row, each
+returning an `AppError` built with the status, code, message and details below.
+Keeping them in one module is what stops the code vocabulary from drifting
+across four services. The factory takes whatever the `details` column needs
+(the offending byte count, the filename, the underlying error, the problem
+description).
 
-| Factory | Status | `code` | User-facing message |
-|---|---|---|---|
-| `emptyDocumentError(reason?)` | 400 | `EMPTY_DOCUMENT` | `Document contains no readable text.` (PDF path appends `It may be a scanned image.`) |
-| `documentTooLargeError(bytes)` | 413 | `DOCUMENT_TOO_LARGE` | `Document is larger than the 10MB limit.` + `details: { bytes, maxBytes }` |
-| `unsupportedFileTypeError(filename)` | 415 | `UNSUPPORTED_FILE_TYPE` | `Only PDF and plain text files are supported.` + `details: { filename }` |
-| `pdfParseError(cause: unknown)` | 400 | `PDF_PARSE_FAILED` | `Could not read this PDF file. It may be corrupted or password-protected.` + `details: { reason: <error name> }` |
-| `chunkValidationError(problem: string)` | 500 | `CHUNK_VALIDATION_FAILED` | `Document processing produced invalid chunks.` + `details: { problem }` |
-| `documentProcessingError(cause: unknown)` | 500 | `DOCUMENT_PROCESSING_FAILED` | `Document processing failed.` (generic wrapper for non-`AppError` throws) |
+| Factory | Status | `code` | User-facing message | `details` |
+|---|---|---|---|---|
+| `emptyDocumentError` | 400 | `EMPTY_DOCUMENT` | `Document contains no readable text.` — the PDF path appends `It may be a scanned image.` | — |
+| `documentTooLargeError` | 413 | `DOCUMENT_TOO_LARGE` | `Document is larger than the 10MB limit.` | the actual byte count and the configured maximum |
+| `unsupportedFileTypeError` | 415 | `UNSUPPORTED_FILE_TYPE` | `Only PDF and plain text files are supported.` | the filename |
+| `pdfParseError` | 400 | `PDF_PARSE_FAILED` | `Could not read this PDF file. It may be corrupted or password-protected.` | a `reason` holding only the underlying error's *name* |
+| `chunkValidationError` | 500 | `CHUNK_VALIDATION_FAILED` | `Document processing produced invalid chunks.` | a `problem` string naming the offending field and chunk index |
+| `documentProcessingError` | 500 | `DOCUMENT_PROCESSING_FAILED` | `Document processing failed.` (generic wrapper for non-`AppError` throws) | — |
 
-Underlying library messages and stacks are **logged, never returned** (ADR-5);
-only the `error.name`-style `reason` crosses the boundary. `errorHandler`
-already maps any `AppError.statusCode` — 413/415 need no middleware change.
+Underlying library messages and stacks are **logged, never returned**
+(ADR-5); only the error-name-level `reason` crosses the boundary. The existing
+error handler already maps any `AppError` status, so 413 and 415 need no
+middleware change.
 
 ---
 
@@ -151,68 +176,74 @@ already maps any `AppError.statusCode` — 413/415 need no middleware change.
 
 **New dependencies: none.** Pure TypeScript.
 
-**`src/services/textIngestion.service.ts`**
-```ts
-export interface TextIngestionInput {
-  content: string | Uint8Array;   // Uint8Array = an uploaded .txt buffer
-  filename?: string;              // absent => pasted text
-}
-export function ingestText(input: TextIngestionInput): NormalizedDocument
-```
-Synchronous — there is no I/O. Steps, in this order:
+**What to build.** In `src/services/textIngestion.service.ts`, an exported
+**synchronous** function `ingestText` (there is no I/O) that takes one input
+object and returns a `NormalizedDocument`. The input has two properties: the
+content, which is either a string (pasted text) or a byte array (an uploaded
+`.txt` file), and an **optional** filename — whose *absence* is what marks the
+input as pasted text.
 
-1. **Size check first, on bytes, before decoding.** `Uint8Array` →
-   `content.byteLength`; `string` → `Buffer.byteLength(content, 'utf8')`.
-   Over `maxDocumentBytes` → throw `documentTooLargeError(bytes)`. Checking
-   before normalisation avoids building a second 10 MB string for a document
-   we are about to reject.
-2. **Decode** `Uint8Array` with `new TextDecoder('utf-8')` (non-fatal:
-   undecodable bytes become U+FFFD rather than an exception — a PoC accepts
-   slightly mangled text over refusing the upload).
-3. **Normalise** (this is the whole "normalized" in the ticket title):
-   strip a leading BOM (`﻿`), `\r\n` → `\n`, bare `\r` → `\n`, then
-   `.trim()` the result. Nothing else — no whitespace collapsing, no case or
-   punctuation changes. CRLF normalisation is load-bearing: it makes the
-   ADR-9 splitter's `\n\n` separator behave identically for Windows-authored
-   `.txt` files.
-4. **Emptiness check on the normalised text** — `=== ''` → throw
-   `emptyDocumentError()`. This is what makes whitespace-only input fail
+Also export from the same module a small helper, `normalizeText`, that takes a
+raw string and returns the normalised string (step 3 below). T02 reuses it per
+page, and it is worth testing on its own.
+
+**Algorithm, in this order:**
+
+1. **Size check first, on bytes, before decoding.** For a byte array use its
+   byte length; for a string measure its UTF-8 byte length (Node's
+   `Buffer.byteLength`, *not* `String.length`). Over `maxDocumentBytes` → throw
+   `documentTooLargeError`. Checking before normalisation avoids building a
+   second 10 MB string for a document we are about to reject.
+2. **Decode** a byte array as UTF-8 using a non-fatal `TextDecoder`, so
+   undecodable bytes become the replacement character rather than an exception
+   — a PoC accepts slightly mangled text over refusing the upload.
+3. **Normalise** — this is the whole "normalized" in the ticket title, and it
+   is exactly these four operations, in order: strip a leading byte-order mark;
+   convert CRLF to LF; convert any remaining bare CR to LF; trim leading and
+   trailing whitespace. Nothing else — no whitespace collapsing, no case or
+   punctuation changes, interior blank lines preserved. The CRLF conversion is
+   load-bearing: it makes ADR-9's blank-line separator behave identically for
+   Windows-authored `.txt` files.
+4. **Emptiness check on the normalised text** — if it is the empty string,
+   throw `emptyDocumentError`. This is what makes whitespace-only input fail
    instead of producing an empty document.
-5. **Build** the `NormalizedDocument`: `id: randomUUID()` (`node:crypto`),
-   `title: input.filename ?? DOCUMENT_PROCESSING.pastedTextTitle`,
-   `sourceType: input.filename ? 'text-file' : 'pasted-text'`,
-   `segments: [{ pageNumber: null, text }]`, `text`, `pageCount: null`,
-   `charCount: text.length`, `uploadedAt: new Date().toISOString()`.
-
-Export the normalise step as `normalizeText(raw: string): string` from this
-module — T02 reuses it per page, and it is worth testing on its own.
+5. **Build the `NormalizedDocument`**: `id` from `randomUUID` (`node:crypto`);
+   `title` = the filename if present, otherwise `DOCUMENT_PROCESSING.pastedTextTitle`;
+   `sourceType` = `'text-file'` when a filename was supplied, `'pasted-text'`
+   otherwise; `segments` = a single segment with `pageNumber` `null` and the
+   normalised text; `text` = the normalised text; `pageCount` = `null`;
+   `charCount` = the text length; `uploadedAt` = the current time as an ISO
+   string.
 
 **Unit tests — `tests/services/textIngestion.test.ts`** must assert:
-- Pasted string → `sourceType 'pasted-text'`, `title 'pasted-text'`,
-  `pageCount === null`, `segments.length === 1`,
-  `segments[0].pageNumber === null`, `segments[0].text === doc.text`,
-  `charCount === doc.text.length`, and the text is preserved exactly
-  (input already trimmed and LF-only ⇒ `doc.text === input`).
-- `filename: 'notes.txt'` with a `Uint8Array` body (use
-  `new TextEncoder().encode(...)`) → `sourceType 'text-file'`,
-  `title 'notes.txt'`, decoded text correct.
-- `uploadedAt` round-trips: `new Date(doc.uploadedAt).toISOString() === doc.uploadedAt`.
-- `id` is a non-empty string and two calls produce different `id`s.
-- Empty-input rejection, one assertion per case: `''`, `'   '`,
-  `'\n\n\t  \r\n'`, and an empty `Uint8Array` — each
-  `assert.throws(..., (e) => e instanceof AppError && e.code === 'EMPTY_DOCUMENT')`.
-- Normalisation: `'a\r\nb\rc'` → `'a\nb\nc'`; a leading `﻿` is gone;
-  leading/trailing blank lines are trimmed while **interior** `\n\n` survives.
-- Size: `maxDocumentBytes + 1` bytes → throws with `code
-  'DOCUMENT_TOO_LARGE'`; a multi-byte string (e.g. `'é'.repeat(...)`) is judged
-  by **bytes, not characters** — this is the assertion that catches a
-  `.length` implementation.
-- Exactly `maxDocumentBytes` succeeds (one 10 MB happy-path case; it runs in
-  milliseconds because ingestion does no chunking).
+- Pasted string input yields `sourceType` `'pasted-text'`, `title`
+  `'pasted-text'`, `pageCount` `null`, exactly one segment, that segment's
+  `pageNumber` `null`, the segment text identical to the document's `text`,
+  `charCount` equal to the text length, and — for input that is already trimmed
+  and LF-only — text preserved exactly as given.
+- Byte-array input with a filename of `notes.txt` (encode the string with
+  `TextEncoder`) yields `sourceType` `'text-file'`, that filename as `title`,
+  and correctly decoded text.
+- `uploadedAt` round-trips: parsing it as a date and re-serialising it to an
+  ISO string returns the same string.
+- `id` is a non-empty string, and two calls produce different ids.
+- Empty-input rejection, one case each: the empty string, spaces only, a mix of
+  newlines/tabs/CR, and an empty byte array. Each must throw an `AppError`
+  whose `code` is `EMPTY_DOCUMENT`.
+- Normalisation: CRLF and bare CR both become LF; a leading byte-order mark is
+  gone; leading and trailing blank lines are trimmed while an **interior** blank
+  line survives.
+- Size: one byte over `maxDocumentBytes` throws with code
+  `DOCUMENT_TOO_LARGE`; and a multi-byte string (e.g. built from an accented
+  character) whose *character* count is under the cap but whose *byte* count is
+  over it must also be rejected — this is the assertion that catches a
+  `String.length` implementation.
+- One happy-path case at exactly `maxDocumentBytes` succeeds. It runs in
+  milliseconds because ingestion does no chunking.
 
 **Verify:** `pnpm --filter backend test`, `pnpm --filter backend typecheck`,
-`pnpm --filter backend build && pnpm --filter backend start` (still boots — this
-is what catches a missing `.js` import extension).
+then `pnpm --filter backend build && pnpm --filter backend start` (still boots —
+this is what catches a missing `.js` import extension).
 
 Estimated diff: ~230 lines (~110 src across three files, ~120 tests). If it
 runs past 250, split as T01a (`document.types.ts` + `documentErrors.ts` +
@@ -222,153 +253,176 @@ runs past 250, split as T01a (`document.types.ts` + `documentErrors.ts` +
 
 ### E2-T02 — PDF Text Extraction
 
-**New dependency: `pdf-parse@^2.4.5`** (ADR-10 — v2's class API; anything that
-looks like `pdfParse(buffer)` is v1 and is wrong).
+**New dependency: `pdf-parse@^2.4.5`** (ADR-10 — v2's class API. Anything that
+looks like calling a default-exported `pdfParse` function on a buffer is v1 and
+is wrong here).
 
-**`src/services/pdfIngestion.service.ts`**
-```ts
-export interface PdfIngestionInput { content: Uint8Array; filename: string }
-export async function ingestPdf(input: PdfIngestionInput): Promise<NormalizedDocument>
-```
-1. Size check on `content.byteLength` → `documentTooLargeError`.
-2. `const parser = new PDFParse({ data: new Uint8Array(content) })`, then
-   `await parser.getText()` inside `try`, with **`await parser.destroy()` in
-   `finally`** — on the success *and* failure paths. A leaked pdf.js worker
-   turns `pnpm test` into a hang instead of a failure.
-3. `catch (cause)`: log the real error via `logger`
-   (`logger.warn({ err: cause, filename }, 'pdf parse failed')`), then
-   `throw pdfParseError(cause)`. Nothing pdfjs-shaped escapes this module.
-4. Map the result (`TextResult { total, text, pages: [{ num, text }] }`):
-   `segments = result.pages.map((p) => ({ pageNumber: p.num, text: normalizeText(p.text) }))`
-   — every page kept, including text-free ones, so
-   `segments.length === pageCount` holds. `pageCount = result.total`.
-5. `text = segments.map((s) => s.text).join('\n\n')` — build it ourselves
-   rather than using `result.text`, so the page separator is exactly the
-   splitter's paragraph separator. Then `text.trim() === ''` → throw
-   `emptyDocumentError('It may be a scanned image.')` (an image-only PDF is
-   the realistic case).
-6. `sourceType: 'pdf'`, `title: input.filename`, rest as in T01.
+**What to build.** In `src/services/pdfIngestion.service.ts`, an exported
+**async** function `ingestPdf` that takes an input object with the PDF's byte
+content and its filename (both required) and resolves to a
+`NormalizedDocument`.
 
-**Test fixtures** — generate once outside the repo and commit the two PDFs; do
-**not** add a PDF-authoring dependency to `package.json`:
-```sh
-mkdir -p /tmp/fx && cd /tmp/fx && npm init -y >/dev/null && npm i pdf-lib
-# script: 3 pages; page N starts with the line `PAGE-N-MARKER` and carries
-# >=1400 chars of text unique to that page (so each page yields >=2 chunks);
-# plus a 1-page document with no drawn text at all.
-# then: cp sample-3page.pdf blank.pdf <repo>/backend/tests/fixtures/
-```
-Load them in tests with `readFile(new URL('../fixtures/sample-3page.pdf', import.meta.url))`
-— never `__dirname` (ESM) and never a cwd-relative path.
-The corrupt-file cases need no fixture: `new TextEncoder().encode('%PDF-1.4 not a real pdf')`
-and `new TextEncoder().encode('just plain text')` both produce pdfjs's
-`InvalidPDFException` (verified).
+**Algorithm, in this order:**
+
+1. **Size check** on the content's byte length → `documentTooLargeError`. This
+   must run *before* any parsing (see the test that pins the ordering).
+2. Construct a `PDFParse` instance with the bytes passed as its `data` option —
+   as a `Uint8Array`, not a `Buffer`, since pdfjs takes ownership of the typed
+   array — and `await` its `getText()`. Do this inside a `try`, with
+   **`await parser.destroy()` in a `finally`**, on the success *and* failure
+   paths. A leaked pdf.js worker turns `pnpm test` into a hang instead of a
+   failure.
+3. On a caught error: log the real error via the shared logger (include the
+   error and the filename), then throw `pdfParseError` with the caught error as
+   its cause. Nothing pdfjs-shaped escapes this module.
+4. Map the library result — it exposes a page total, a joined text, and an
+   array of per-page entries each carrying a 1-based page number and that
+   page's text — onto `segments`: one segment per page entry, in order,
+   `pageNumber` from the library's page number, `text` passed through
+   `normalizeText` from T01. **Keep every page**, including text-free ones, so
+   `segments.length` always equals `pageCount`. Set `pageCount` from the
+   library's page total.
+5. Build `text` yourself by joining the segment texts with a **blank line**
+   between them, rather than using the library's own joined text, so the page
+   separator is exactly the splitter's paragraph separator. If the result is
+   blank after trimming, throw `emptyDocumentError` with the scanned-image
+   hint — an image-only PDF is the realistic case.
+6. Fill the remaining fields as in T01, with `sourceType` `'pdf'` and `title`
+   set to the passed filename.
+
+**Test fixtures.** Two small PDFs are committed under `backend/tests/fixtures/`.
+Generate them **once, outside the repo** — create a throwaway directory, install
+a PDF-authoring library such as `pdf-lib` there, write a short throwaway script,
+run it, and copy the two output files into the fixtures directory. Do **not**
+add a PDF-authoring dependency to `backend/package.json`, and do not commit the
+throwaway script.
+
+- `sample-3page.pdf` — three pages. Each page must begin with a marker line
+  that names its own page number in a form the tests can search for (page 1
+  carries a marker unique to page 1, and so on), and must carry at least
+  ~1400 characters of text unique to that page, so that every page yields two
+  or more chunks in T03/T04.
+- `blank.pdf` — a single page with no text drawn on it at all.
+
+Load fixtures in tests by resolving their path relative to the test file's own
+module URL (`import.meta.url`) — ESM has no `__dirname`, and a
+working-directory-relative path breaks depending on where the runner is
+invoked. The corrupt-file cases need no fixture: a byte buffer holding the
+ASCII text `%PDF-1.4 not a real pdf`, and one holding ordinary prose, both
+produce pdfjs's invalid-PDF exception (verified).
 
 **Unit tests — `tests/services/pdfIngestion.test.ts`** must assert:
-- `sample-3page.pdf` → `pageCount === 3`, `segments.length === 3`,
-  `segments.map(s => s.pageNumber)` deep-equals `[1, 2, 3]`, and
-  `segments[i].text` contains `PAGE-${i+1}-MARKER` **and not** the other pages'
-  markers. That last part is the real "page metadata is correct" assertion —
-  a page-count check alone passes even if the text is misattributed.
-- No data loss: `doc.text` contains all three markers, and
-  `doc.charCount === doc.text.length`.
-- `sourceType 'pdf'`, `title` is the passed filename, `uploadedAt` round-trips.
-- Corrupt input and a non-PDF body → `assert.rejects` with `code
-  'PDF_PARSE_FAILED'`, `statusCode 400`, and the raw response-safe message
-  (assert the message does **not** contain `'InvalidPDF'`; the library detail
-  belongs in `details.reason`).
-- `blank.pdf` → rejects with `code 'EMPTY_DOCUMENT'`.
-- Over-size buffer → `code 'DOCUMENT_TOO_LARGE'`, and it rejects **without**
-  invoking the parser (a 10 MB+ `Uint8Array` of zeros is not a PDF; if the
-  size check ran second the error code would be `PDF_PARSE_FAILED` — so this
-  test also pins the ordering).
-- Performance guard: extracting `sample-3page.pdf` completes in under 2000 ms
-  (measured ~213 ms cold, ~13 ms warm for 10 pages). A deliberately loose
+- `sample-3page.pdf` gives `pageCount` 3, three segments, segment page numbers
+  1, 2 and 3 in order, and — the important one — each segment's text contains
+  **its own** page marker and **none of the other pages'** markers. A
+  page-count check alone passes even when the text is misattributed.
+- No data loss: the document's `text` contains all three page markers, and
+  `charCount` equals the `text` length.
+- `sourceType` is `'pdf'`, `title` is the filename passed in, and `uploadedAt`
+  round-trips as in T01.
+- Corrupt input and a non-PDF body both reject with an `AppError` whose `code`
+  is `PDF_PARSE_FAILED` and status is 400 — and whose *message* does not
+  contain the library's exception name (that belongs in `details.reason`).
+- `blank.pdf` rejects with code `EMPTY_DOCUMENT`.
+- An over-size buffer rejects with `DOCUMENT_TOO_LARGE` **without** invoking
+  the parser. A 10 MB-plus array of zero bytes is not a valid PDF, so if the
+  size check ran second the code would be `PDF_PARSE_FAILED` — this test
+  therefore also pins step 1's ordering.
+- Performance guard: extracting `sample-3page.pdf` finishes in under 2000 ms
+  (measured ~213 ms cold, ~13 ms warm for ten pages). A deliberately loose
   smoke guard, not a benchmark.
-- The test file must leave no open handle — `pnpm test` exiting on its own is
-  part of the acceptance here.
+- The test file leaves no open handle — `pnpm test` exiting on its own is part
+  of the acceptance here.
 
 **Verify:** `pnpm --filter backend test` (and confirm the process exits, ~1 s);
-`typecheck`; `build` + `start`; manually run a real ~10-page PDF and a real
-~10 MB PDF through `ingestPdf` once (the epic's `<2s` / 10 MB criteria) — a
-committed 10 MB fixture is not acceptable.
+`typecheck`; `build` + `start`; and manually run one real ~10-page PDF and one
+real ~10 MB PDF through `ingestPdf` once, to cover the epic's under-2-seconds
+and 10 MB criteria — committing a 10 MB fixture is not acceptable.
 
-Estimated diff: ~170 lines (~70 src, ~100 tests) + 2 binary fixtures.
+Estimated diff: ~170 lines (~70 src, ~100 tests) plus the two binary fixtures.
 
 ---
 
 ### E2-T03 — Document Chunking Service
 
 **New dependencies: `@langchain/textsplitters@^1.0.1` and
-`@langchain/core@^1.2.9`** (ADR-9 — `core` is a runtime peer, list it
+`@langchain/core@^1.2.9`** (ADR-9 — `core` is a runtime peer, so list it
 explicitly; do **not** add the `langchain` meta-package).
 
-**`src/services/chunking.service.ts`**
-```ts
-export async function chunkDocument(document: NormalizedDocument): Promise<Chunk[]>
-```
-- Construct one `new RecursiveCharacterTextSplitter({ chunkSize:
-  DOCUMENT_PROCESSING.chunkSize, chunkOverlap: DOCUMENT_PROCESSING.chunkOverlap })`
-  per call (cheap, stateless, keeps the function pure). Default separators —
-  do not override them.
-- Iterate `document.segments` **in order**; for each, `await
-  splitter.splitText(segment.text)`; for each returned string, push a `Chunk`
-  with a running document-wide counter as `index`, `id:
-  \`${document.id}#${index}\``, `documentId: document.id`, and `metadata:
-  { source: document.title, sourceType: document.sourceType, pageNumber:
-  segment.pageNumber, uploadedAt: document.uploadedAt }`.
-- Chunk `metadata.pageNumber` comes from the **segment**, never from parsing
-  the chunk text (ADR-11).
-- `splitText('')` returns `[]` (verified), so a text-free PDF page contributes
-  no chunks and needs no special case.
-- Use `splitText` only — not `createDocuments`, not `splitDocuments`, and do
-  not import `Document` (ADR-9: its `metadata` is `any`).
-- `logger.debug({ documentId, chunks: chunks.length }, 'document chunked')` at
-  the end. No other logging.
+**What to build.** In `src/services/chunking.service.ts`, an exported **async**
+function `chunkDocument` that takes a `NormalizedDocument` and resolves to an
+ordered array of `Chunk`s.
+
+**Algorithm:**
+
+1. Create one `RecursiveCharacterTextSplitter` per call, configured with
+   `DOCUMENT_PROCESSING.chunkSize` and `DOCUMENT_PROCESSING.chunkOverlap`
+   (cheap, stateless, keeps the function pure). **Leave the default separators
+   alone.**
+2. Iterate `document.segments` **in order**. For each segment, `await` the
+   splitter's `splitText` on that segment's text — the method that returns
+   plain strings. Use only `splitText`: not `createDocuments`, not
+   `splitDocuments`, and do not import LangChain's `Document` type (ADR-9 — its
+   metadata is typed as `any`).
+3. For each returned string, append a `Chunk` using a **single running counter**
+   across the whole document as `index`, the document-id-plus-`#`-plus-index
+   form as `id`, the document's `id` as `documentId`, and metadata built from
+   the document's `title`, `sourceType` and `uploadedAt` plus **the current
+   segment's** `pageNumber`. The page number always comes from the segment,
+   never from inspecting the chunk text (ADR-11).
+4. A segment whose text is empty needs no special case: the splitter returns an
+   empty array for empty input (verified), so a text-free PDF page simply
+   contributes no chunks.
+5. Log once at debug level at the end, with the document id and the chunk
+   count. No other logging in this service.
 
 **Overlap is an upper bound, not a guarantee — read this before writing the
-tests.** Measured with `1000/200`:
-- One long paragraph of unique words, no blank lines → sizes
-  `995,995,995,995,995,809`, overlap **197** between every consecutive pair.
-- Eight paragraphs joined by `\n\n` → four 840-char chunks, overlap **0**,
-  because the merge unit is a whole paragraph longer than the overlap budget.
+tests.** Measured at 1000/200:
+- One long paragraph of unique words with no blank lines → chunk sizes
+  995, 995, 995, 995, 995, 809, with **197** characters of overlap between
+  every consecutive pair.
+- Eight paragraphs joined by blank lines → four chunks of 840 characters with
+  **0** overlap, because the merge unit is a whole paragraph longer than the
+  overlap budget.
 
 So: **assert overlap only on a fixture with no blank lines.** Asserting ~200
-overlap on a multi-paragraph fixture will fail against correct code. ADR-9 has
-the full explanation; the Reviewer should read it before judging this ticket
-against the plan's "~200-character overlap" wording.
+characters of overlap on a multi-paragraph fixture will fail against correct
+code. ADR-9 has the full explanation, and the Reviewer should read it before
+judging this ticket against the plan's "~200-character overlap" wording.
 
 **Unit tests — `tests/services/chunking.test.ts`** must assert:
-- **Multi-chunk with overlap:** a ~4800-char single-paragraph document of
-  *unique* tokens (e.g. `w0000 w0001 …` — repeated filler makes any
-  overlap measurement meaningless, since a periodic string self-matches).
-  Assert: more than one chunk; every `text.length <= 1000`; for each
-  consecutive pair, the tail of `chunks[i]` equals the head of `chunks[i+1]`
-  for some length `n` with `0 < n <= 200`; and no token from the input is
-  missing across the concatenated chunks.
-- **Ordering/attribution:** `chunks.map(c => c.index)` deep-equals
-  `[0..n-1]`; every `documentId === document.id`; every `id === \`${documentId}#${index}\``;
-  `metadata.source === document.title`; `metadata.uploadedAt === document.uploadedAt`.
-- **Page propagation:** build a `NormalizedDocument` **by hand** with three
-  segments (`pageNumber` 1/2/3, each >1400 chars of page-unique text) — no PDF
-  needed here, T02 already covers extraction. Assert every chunk containing
-  page 2's marker has `metadata.pageNumber === 2`; that the set of page numbers
-  seen is `[1,2,3]`; that chunk indices are still globally contiguous and in
-  page order; and that **no chunk's text spans two pages** (it must not contain
-  markers from two different pages) — the ADR-11 invariant.
-- **Text-source documents carry no page number:** every chunk from an
-  `ingestText` document has `metadata.pageNumber === null`.
-- **Short document:** ~200 chars → exactly one chunk whose `text` equals the
-  document's text, `index === 0`.
+- **Multi-chunk with overlap.** Use a ~4800-character single-paragraph document
+  built from *unique* tokens (e.g. `w0000 w0001 …`) — repeated filler text makes
+  any overlap measurement meaningless, because a periodic string matches itself
+  at almost any offset. Assert: more than one chunk; every chunk at most 1000
+  characters; for each consecutive pair, the tail of the earlier chunk equals
+  the head of the later one for some length greater than 0 and at most 200; and
+  that no input token is missing across the chunks taken together.
+- **Ordering and attribution.** The chunk indexes are 0 up to n−1 in order;
+  every chunk's `documentId` is the document's id; every chunk's `id` matches
+  the document-id-plus-index convention; `metadata.source` is the document
+  title; `metadata.uploadedAt` is the document's timestamp.
+- **Page propagation.** Build a `NormalizedDocument` **by hand** with three
+  segments (page numbers 1, 2 and 3, each holding more than 1400 characters of
+  page-unique text). No PDF is needed here — T02 already covers extraction.
+  Assert: every chunk containing page 2's marker reports `pageNumber` 2; the
+  set of page numbers seen across all chunks is exactly 1, 2, 3; indexes remain
+  globally contiguous and in page order; and **no chunk's text spans two
+  pages** (no chunk contains markers from two different pages) — the ADR-11
+  invariant.
+- **Text-source documents carry no page number:** every chunk derived from an
+  `ingestText` document reports `pageNumber` `null`.
+- **Short document:** a ~200-character document yields exactly one chunk, whose
+  text is the document's full text and whose index is 0.
 - **A segment with empty text contributes zero chunks**, and the following
-  segment's chunks continue the index sequence without a gap.
-- Optional: a helper `tests/helpers/documentFixtures.ts`
-  (`makeDocument({ segments, sourceType })`) if the fixture building repeats;
+  segment's chunks continue the index sequence with no gap.
+- Optional: a `tests/helpers/documentFixtures.ts` helper that builds a
+  `NormalizedDocument` from a list of segments, if the fixture building repeats.
   T04's tests can reuse it.
 
-**Verify:** `pnpm --filter backend test`; `typecheck`; `build` + `start`;
-`pnpm --filter backend why @langchain/core` shows it as a direct dependency,
-not a hoisted peer.
+**Verify:** `pnpm --filter backend test`; `typecheck`; `build` + `start`; and
+`pnpm --filter backend why @langchain/core` to confirm it is a direct
+dependency rather than a hoisted peer.
 
 Estimated diff: ~180 lines (~60 src, ~120 tests).
 
@@ -378,119 +432,124 @@ Estimated diff: ~180 lines (~60 src, ~120 tests).
 
 **New dependencies: none.**
 
-**`src/services/chunkValidation.service.ts`**
-```ts
-export function validateChunks(documentId: string, chunks: Chunk[]): Chunk[]
-```
-Runs in this order:
-1. **Reject on invariant violation** (throw
-   `chunkValidationError(problem)`, 500 — our own chunker produced these, so a
-   violation is a bug, not user input). A chunk is invalid when any of:
-   `metadata.source` is not a non-empty string; `documentId` is not a non-empty
-   string or does not match the passed `documentId`; `index` is not a
-   non-negative integer; `metadata` is absent. The `problem` string names the
-   offending field and the chunk `index` — it lands in `details`, and is logged.
-2. **Filter out** chunks whose `text.trim() === ''`. If any were dropped,
-   `logger.warn({ documentId, dropped }, 'dropped empty chunks')`.
-3. **Renumber** the survivors so `index` is contiguous from 0 and
-   `id` is rebuilt as `` `${documentId}#${index}` ``. Return new objects
-   (spread), never mutate the input. This makes `chunks[i].index === i` a
-   guaranteed post-condition for everything downstream — document it in a
-   doc comment above the function, since "validate" alone does not imply it.
-4. If **zero** chunks survive → throw `emptyDocumentError()`. A document that
+**What to build, part 1 — the validator.** In
+`src/services/chunkValidation.service.ts`, an exported **synchronous** function
+`validateChunks` that takes the expected document id and an array of `Chunk`s
+and returns a validated array of `Chunk`s. It runs these steps in order:
+
+1. **Reject on invariant violation** by throwing `chunkValidationError` (status
+   500 — our own chunker produced these chunks, so a violation is a bug, not
+   user input). A chunk is invalid when any of the following holds:
+   `metadata` is absent; `metadata.source` is not a non-empty string;
+   `documentId` is not a non-empty string, or does not match the document id
+   passed in; `index` is not a non-negative integer. The `problem` string names
+   the offending field and the chunk's index; it lands in the error's `details`
+   and is logged.
+2. **Filter out** chunks whose text is empty or whitespace-only. If any were
+   dropped, log a warning with the document id and the number dropped.
+3. **Renumber** the survivors so indexes are contiguous from 0 and each `id` is
+   rebuilt from the document id and the new index. Return **new** chunk
+   objects; never mutate the input array or its elements. This makes "a chunk's
+   `index` equals its position in the array" a guaranteed post-condition for
+   everything downstream — say so in a doc comment above the function, since
+   the name "validate" does not imply renumbering.
+4. If **zero** chunks survive, throw `emptyDocumentError`. A document that
    produces no usable chunks is not a success.
 
 The empty-chunk filter is deliberately defensive: the ADR-9 splitter never
-emits an empty string (verified — `splitText('')` returns `[]`), so **this
-branch cannot be reached end-to-end**. Test it by calling `validateChunks`
-directly with a hand-built list. Do not contort the pipeline to produce one.
+emits an empty string (verified — it returns an empty array for empty input),
+so **this branch cannot be reached end-to-end**. Test it by calling
+`validateChunks` directly with a hand-built list. Do not contort the pipeline
+into producing one.
 
-**`src/services/documentPipeline.service.ts`** — the single entry point E4 will
-call, and the thing that makes validation automatic rather than a step a caller
-can forget:
-```ts
-export async function processPastedText(text: string): Promise<ProcessedDocument>
-export async function processFile(file: {
-  filename: string;
-  content: Uint8Array;
-  mimeType?: string;
-}): Promise<ProcessedDocument>
-```
-- `processPastedText` → `ingestText({ content: text })` → chunk → validate.
-- `processFile` routes by **lower-cased filename extension first**, falling back
-  to `mimeType` (multer's mime types are unreliable):
-  `.pdf` / `application/pdf` → `ingestPdf`; `.txt` / `.md` / `text/*` →
-  `ingestText({ content, filename })`; anything else →
-  `unsupportedFileTypeError(filename)`. Routing lives here, not in E4's route,
-  so it is unit-testable without HTTP.
-- Both wrap the whole sequence: `AppError`s propagate **unchanged** (they
-  already carry the right code and status); any other throw is logged and
-  re-thrown as `documentProcessingError(cause)`.
-- **No partial results, ever.** `ProcessedDocument` is constructed and returned
-  only after validation passes, so a mid-pipeline failure can only surface as a
-  rejected promise — there is no intermediate state for a caller to
-  misinterpret. Nothing is stored here; E4 stores the result in the session
-  only on success.
-- `logger.info({ documentId, sourceType, chunks }, 'document processed')` on
-  success.
+**What to build, part 2 — the pipeline.** In
+`src/services/documentPipeline.service.ts`, the single entry point E4 will call,
+and the thing that makes validation automatic instead of a step a caller can
+forget. Two exported **async** functions, each resolving to a
+`ProcessedDocument`:
+
+- `processPastedText` — takes the pasted text as a string; ingests it as text,
+  chunks it, validates the chunks.
+- `processFile` — takes a file object with a filename, byte content, and an
+  optional MIME type; routes it to the right ingestion path, then chunks and
+  validates.
+
+Routing rules for `processFile`: decide on the **lower-cased filename
+extension first**, falling back to the MIME type only when the extension is
+absent or unrecognised (multer's MIME types are unreliable). A `.pdf`
+extension or the PDF MIME type takes the PDF path; `.txt` or `.md`, or any
+`text/*` MIME type, takes the text path with the filename passed through;
+anything else throws `unsupportedFileTypeError`. This routing lives here, not
+in E4's route handler, so it is unit-testable without HTTP.
+
+Both functions wrap the whole sequence: an `AppError` propagates **unchanged**
+(it already carries the right code and status); any other thrown value is
+logged and re-thrown as `documentProcessingError`. Log once at info level on
+success with the document id, source type and chunk count.
+
+**No partial results, ever.** The `ProcessedDocument` is assembled and returned
+only after validation passes, so a mid-pipeline failure can only surface as a
+rejected promise — there is no intermediate state for a caller to
+misinterpret. Nothing is stored here; E4 stores the result in the session only
+on success.
 
 **Why there is no `Result`/`Either` type.** The plan's wording ("the caller
 receives a clear failure result") is satisfied by a rejected promise carrying an
 `AppError`: ADR-5 already routes any `AppError` to one JSON envelope with the
 right status code, and sprint 1 fixed "services signal failure by throwing
-`AppError`" as the layering rule. Introducing a `Result<T, E>` here would create
-a second, parallel error channel that E4's routes would have to unwrap and
-re-throw into the first one — more code, two ways to fail, and no reviewer
+`AppError`" as the layering rule. Introducing a result-wrapper type here would
+create a second, parallel error channel that E4's routes would have to unwrap
+and re-throw into the first one — more code, two ways to fail, and no reviewer
 benefit. This is an application of ADR-5, not a new decision, so it gets no ADR
 of its own.
 
-**Unit tests — `tests/services/chunkValidation.test.ts`:**
-- Empty and whitespace-only chunks are dropped: a hand-built list of 4 chunks
-  where index 1 has `text: ''` and index 2 has `text: '   \n '` → 2 chunks
-  returned, both with non-empty text, `indices deep-equal [0, 1]`, `id`s
-  rebuilt to match, and the surviving chunks' `text` unchanged.
-- The input array is not mutated (assert the original still has 4 entries and
-  its original `index` values).
-- Missing/invalid metadata → throws, one case each: `metadata.source: ''`,
-  `documentId: ''`, a `documentId` that disagrees with the argument,
-  `index: -1`, `index: 1.5`. Each asserts `code === 'CHUNK_VALIDATION_FAILED'`,
-  `statusCode === 500`, and that `details.problem` names the field.
-- A valid list passes through unchanged (deep-equal), so validation is not
+**Unit tests — `tests/services/chunkValidation.test.ts`** must assert:
+- Empty and whitespace-only chunks are dropped: from a hand-built list of four
+  chunks where the second has empty text and the third is whitespace-only, two
+  chunks come back, both with non-empty text, with indexes 0 and 1, with `id`s
+  rebuilt to match, and with the surviving chunks' text unchanged.
+- The input array is not mutated — it still has four entries with their
+  original index values afterwards.
+- Invalid metadata throws, one case each: an empty `metadata.source`; an empty
+  `documentId`; a `documentId` that disagrees with the argument; a negative
+  `index`; a fractional `index`. Each asserts code `CHUNK_VALIDATION_FAILED`,
+  status 500, and that `details.problem` names the offending field.
+- A valid list passes through unchanged (deep equality), so validation is not
   silently rewriting good data.
-- All-empty input list, and an input where every chunk is filtered → throws
-  `EMPTY_DOCUMENT`.
+- An empty input list, and a list in which every chunk is filtered out, both
+  throw `EMPTY_DOCUMENT`.
 
-**Unit tests — `tests/services/documentPipeline.test.ts`** (the end-to-end
-flows, still no HTTP):
-- Valid pasted text (~4800 chars) → resolves; `document.sourceType
-  'pasted-text'`; chunks are contiguous from 0, none empty, every
-  `metadata.pageNumber === null`, every `text.length <= 1000`.
-- `processFile` with `sample-3page.pdf` → chunks spanning page numbers
-  `[1,2,3]`, contiguous indices, `document.pageCount === 3` — the "extract →
-  chunk → validate" happy path.
-- `processFile` with a `.txt` filename and a `Uint8Array` body → text path,
-  `sourceType 'text-file'`.
-- `processFile` with a corrupt `.pdf` body → rejects with `PDF_PARSE_FAILED`,
-  and the rejection is an `AppError` (not a raw pdfjs error): this is the
-  "mid-pipeline failure surfaces as a clear error, not a partial success"
-  assertion. Also assert nothing resolvable is returned (use `assert.rejects`,
-  and do not assert on internal state — there is none).
-- `processFile` with `report.docx` / `image.png` → rejects with
+**Unit tests — `tests/services/documentPipeline.test.ts`** — the end-to-end
+flows, still with no HTTP:
+- Valid pasted text of ~4800 characters resolves; `sourceType` is
+  `'pasted-text'`; chunk indexes are contiguous from 0; no chunk is empty;
+  every chunk reports `pageNumber` `null`; no chunk exceeds 1000 characters.
+- `processFile` with `sample-3page.pdf` yields chunks spanning page numbers 1,
+  2 and 3, contiguous indexes, and `pageCount` 3 — the extract → chunk →
+  validate happy path.
+- `processFile` with a `.txt` filename and byte content takes the text path and
+  reports `sourceType` `'text-file'`.
+- `processFile` with a corrupt `.pdf` body rejects with `PDF_PARSE_FAILED`, and
+  the rejection value is an `AppError` rather than a raw pdfjs error — this is
+  the "mid-pipeline failure surfaces as a clear error, not a partial success"
+  assertion. Assert only that the call rejects; there is no internal state to
+  inspect, by design.
+- `processFile` with `report.docx` and with `image.png` rejects with
   `UNSUPPORTED_FILE_TYPE` (415) *before* any parsing is attempted.
-- `processPastedText('   ')` → rejects with `EMPTY_DOCUMENT`.
-- Extension routing beats a wrong `mimeType`: `{ filename: 'notes.txt',
-  mimeType: 'application/pdf' }` takes the text path.
-- Optionally: a `mimeType`-only route decision when the filename has no
-  extension.
+- Pasted whitespace-only text rejects with `EMPTY_DOCUMENT`.
+- The extension beats a contradicting MIME type: a `notes.txt` filename sent
+  with a PDF MIME type takes the text path.
+- Optionally, a routing decision made from the MIME type alone, for a filename
+  with no extension.
 
 **Deliberately not validated** (say no to these in review): a maximum
-chunk-length check (the splitter is measured to respect `chunkSize`, and a hard
-throw there would be a new failure mode for no observed problem), duplicate
-chunk detection (plan: out of scope), and language/encoding detection.
+chunk-length check (the splitter is measured to respect the chunk size, and a
+hard throw there would add a failure mode for no observed problem), duplicate
+chunk detection (plan: out of scope), and language or encoding detection.
 
-**Verify:** `pnpm --filter backend test`; `typecheck`; `build` + `start`;
-temporarily make `chunkDocument` emit one `text: ''` chunk and confirm the
-pipeline still returns clean chunks, then revert.
+**Verify:** `pnpm --filter backend test`; `typecheck`; `build` + `start`; and
+as a one-off manual check, temporarily make the chunker emit one empty-text
+chunk and confirm the pipeline still returns clean chunks, then revert it.
 
 Estimated diff: ~250 lines (~110 src, ~140 tests). If it runs past 250, split
 as T04a (`chunkValidation.service.ts` + its tests) and T04b
@@ -501,7 +560,7 @@ imports the validator.
 **None** — no database, no persistence, no in-memory store yet (`CLAUDE.md`:
 in-memory PoC; the session store arrives in E4). This sprint adds *type* shapes
 only, listed under *Shared shapes* above; nothing is written anywhere. The
-`NormalizedDocument` / `Chunk` interfaces are the de-facto schema E3's vector
+`NormalizedDocument` and `Chunk` shapes are the de-facto schema E3's vector
 store and E4's session store will both hold, which is why they are defined once
 in `document.types.ts` and kept JSON-serialisable.
 
@@ -512,15 +571,15 @@ in `document.types.ts` and kept JSON-serialisable.
 
 **New internal interfaces (what E3 and E4 build on):**
 
-| Export | Module | Signature |
+| Export | Module | Takes → returns |
 |---|---|---|
-| `ingestText` | `services/textIngestion.service.ts` | `(input: TextIngestionInput) => NormalizedDocument` |
-| `normalizeText` | `services/textIngestion.service.ts` | `(raw: string) => string` |
-| `ingestPdf` | `services/pdfIngestion.service.ts` | `(input: PdfIngestionInput) => Promise<NormalizedDocument>` |
-| `chunkDocument` | `services/chunking.service.ts` | `(document: NormalizedDocument) => Promise<Chunk[]>` |
-| `validateChunks` | `services/chunkValidation.service.ts` | `(documentId: string, chunks: Chunk[]) => Chunk[]` |
-| `processPastedText` | `services/documentPipeline.service.ts` | `(text: string) => Promise<ProcessedDocument>` |
-| `processFile` | `services/documentPipeline.service.ts` | `(file: { filename: string; content: Uint8Array; mimeType?: string }) => Promise<ProcessedDocument>` |
+| `ingestText` | `services/textIngestion.service.ts` | content (string or bytes) + optional filename → `NormalizedDocument`, synchronously |
+| `normalizeText` | `services/textIngestion.service.ts` | a raw string → the normalised string |
+| `ingestPdf` | `services/pdfIngestion.service.ts` | PDF bytes + filename → a promise of `NormalizedDocument` |
+| `chunkDocument` | `services/chunking.service.ts` | a `NormalizedDocument` → a promise of an ordered `Chunk` array |
+| `validateChunks` | `services/chunkValidation.service.ts` | expected document id + `Chunk` array → a validated, renumbered `Chunk` array, synchronously |
+| `processPastedText` | `services/documentPipeline.service.ts` | pasted text → a promise of `ProcessedDocument` |
+| `processFile` | `services/documentPipeline.service.ts` | filename + bytes + optional MIME type → a promise of `ProcessedDocument` |
 | types + `DOCUMENT_PROCESSING` | `services/document.types.ts` | see *Shared shapes* |
 | error factories | `errors/documentErrors.ts` | see *Error vocabulary* |
 
@@ -534,44 +593,46 @@ standard envelope.
 ## Cross-sprint flags
 Decisions here that constrain later sprints — read before starting E3/E4.
 
-1. **`processPastedText` / `processFile` are the only entry points E4 should
-   call.** Do not call `ingestPdf` → `chunkDocument` by hand from a route:
-   validation is wired into the pipeline (T04's AC), and bypassing it bypasses
-   the AC. E4's route parses multipart, enforces the ≤3-documents-per-session
-   rule, and hands `{ filename, content, mimeType }` over.
-2. **The 10MB cap is enforced in the service** (`DOCUMENT_PROCESSING.maxDocumentBytes`).
-   E4 must also configure its upload middleware's own limit to the same
-   constant — importing it, not re-typing `10 * 1024 * 1024` — so a huge upload
-   is rejected before it is fully buffered in memory.
-3. **`pageNumber` is `number | null`.** E3's retrieval/citations and E6's UI
-   must handle `null` (pasted text has no pages). Do not paper over it with
-   `?? 1`.
+1. **`processPastedText` and `processFile` are the only entry points E4 should
+   call.** Do not call `ingestPdf` and then `chunkDocument` by hand from a
+   route: validation is wired into the pipeline (T04's AC), and bypassing it
+   bypasses the AC. E4's route parses multipart, enforces the
+   three-documents-per-session rule, and hands over the filename, bytes and
+   MIME type.
+2. **The 10 MB cap is enforced in the service**
+   (`DOCUMENT_PROCESSING.maxDocumentBytes`). E4 must configure its upload
+   middleware's own limit from that same constant — importing it, not
+   re-typing the number — so a huge upload is rejected before it is fully
+   buffered in memory.
+3. **`pageNumber` is a number *or* `null`.** E3's retrieval and citations and
+   E6's UI must both handle `null` (pasted text has no pages). Do not paper
+   over it by defaulting to page 1.
 4. **`Chunk` is our type, not LangChain's `Document`** (ADR-9). E3 converts at
-   the embedding boundary: `new Document({ pageContent: chunk.text, metadata:
-   { ...chunk.metadata, chunkId: chunk.id, documentId: chunk.documentId } })`.
-   Keep the conversion in one place so the untyped-`metadata` surface stays
-   contained.
+   the embedding boundary — one `Document` per chunk, the chunk text as its
+   page content, and its metadata carrying the chunk metadata plus the chunk
+   and document ids. Keep that conversion in one place so LangChain's untyped
+   metadata surface stays contained.
 5. **`@langchain/core@^1.2.9` is now pinned by this sprint.** E3 must add
-   `@langchain/langgraph` and `@langchain/openai` versions compatible with
-   core 1.x (and must not add the `langchain` meta-package). Verify against the
+   `@langchain/langgraph` and `@langchain/openai` at versions compatible with
+   core 1.x, and must not add the `langchain` meta-package. Verify against the
    registry at that time, per ADR-6.
-6. **Chunk size/overlap are fixed constants and the overlap is an upper bound**
-   (ADR-9). If E3's retrieval quality is poor, the tuning knobs are
-   `DOCUMENT_PROCESSING.chunkSize` / `chunkOverlap` and possibly a token-based
-   splitter (`js-tiktoken` is already present via `core`) — one place, and it
-   needs an ADR amendment, not a scattered change.
-7. **No overlap across page boundaries** (ADR-11), and expect a short tail chunk
-   per PDF page. If E3 sees answers cut off exactly at page breaks, that is this
-   decision, and the fix is a design change, not a prompt tweak.
+6. **Chunk size and overlap are fixed constants, and the overlap is an upper
+   bound** (ADR-9). If E3's retrieval quality is poor, the knobs are
+   `DOCUMENT_PROCESSING.chunkSize` and `chunkOverlap`, and possibly a
+   token-based splitter (`js-tiktoken` already ships with `core`) — one place,
+   and it needs an ADR amendment, not a scattered change.
+7. **No overlap across page boundaries** (ADR-11), and expect a short tail
+   chunk per PDF page. If E3 sees answers cut off exactly at page breaks, that
+   is this decision, and the fix is a design change, not a prompt tweak.
 8. **`pdf-parse` pulls a native binary** (`@napi-rs/canvas`). E8/CI on a
    different architecture, or any Docker image, must confirm `pnpm install`
    succeeds; ADR-10 records `unpdf` as the verified swap-in if it does not.
 9. **`document.text` is display-only.** E6's preview and E4's responses may read
-   it; nothing may chunk or embed it — chunking reads `segments` (ADR-11). A 10
-   MB document is held twice in memory; if the session store makes that hurt,
-   `text` becomes a derived helper.
-10. **Every service here is synchronous-or-`Promise` and framework-free**, with
-    no import-time side effects and no injected collaborators needed — so
-    sprint 1's flag 11 (testability) is satisfied without seams. E3's LLM client
-    is the case that will need injection (ADR-8); do not break this property by
-    reaching for a module-level singleton there.
+   it; nothing may chunk or embed it — chunking reads `segments` (ADR-11). A
+   10 MB document is held in memory twice; if the session store makes that
+   hurt, `text` becomes a derived helper.
+10. **Every service here is either synchronous or promise-returning,
+    framework-free, free of import-time side effects, and needs no injected
+    collaborators** — so sprint 1's flag 11 (testability) is satisfied without
+    seams. E3's LLM client is the case that *will* need injection (ADR-8); do
+    not break this property by reaching for a module-level singleton there.

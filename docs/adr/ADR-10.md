@@ -26,10 +26,10 @@ Candidates were installed and run against generated 3-page / 10-page / corrupt
 ## Decision
 Use **`pdf-parse@^2.4.5`**, via its class API:
 
-```
-new PDFParse({ data: Uint8Array }) → await parser.getText() → TextResult
-TextResult = { total: number; text: string; pages: Array<{ num: number; text: string }> }
-```
+a `PDFParse` instance is constructed with the PDF bytes as its `data` option,
+and its awaited `getText()` resolves to a text result exposing three things we
+use: the page `total`, the whole document's joined `text`, and a `pages` array
+whose entries each carry a 1-based page number (`num`) and that page's `text`.
 
 Rules for the implementation:
 - Always `await parser.destroy()` in a `finally` — including on the failure

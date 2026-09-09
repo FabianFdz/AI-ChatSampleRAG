@@ -20,20 +20,13 @@ are not reliably substrings at reliable offsets.
 The normalized document carries **ordered segments**, and chunking runs
 **per segment**:
 
-```ts
-interface DocumentSegment { pageNumber: number | null; text: string }
-
-interface NormalizedDocument {
-  id: string;                 // randomUUID()
-  title: string;              // filename, or 'pasted-text'
-  sourceType: 'pasted-text' | 'text-file' | 'pdf';
-  segments: DocumentSegment[];// PDF: one per page, in order. Text: exactly one, pageNumber null
-  text: string;               // full text — display/preview only, never chunked
-  pageCount: number | null;   // PDF: page total. Text: null
-  charCount: number;
-  uploadedAt: string;         // ISO-8601
-}
-```
+A **document segment** is a page number (1-based, or `null` when the source has
+no pages) plus the text belonging to it. A **normalized document** carries an
+identity (a random UUID), a title (the filename, or the pasted-text label), a
+source type of pasted text / text file / PDF, the ordered list of segments, the
+full text as a single string, a page count (`null` for text sources), a
+character count, and an ISO-8601 upload timestamp. `design.md` holds the
+field-by-field table.
 
 - **PDF** → one segment per page, `pageNumber` = the PDF's own 1-based page
   number, kept even for pages with no extractable text (so
