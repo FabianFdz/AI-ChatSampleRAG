@@ -3,11 +3,13 @@
   "from": "planner",
   "to": "architect",
   "status": "approved",
-  "timestamp": "2026-09-08T22:37:28Z",
+  "timestamp": "2026-09-09T00:36:57Z",
   "payload": {
     "epic": "E1",
     "sprint": 1,
-    "tickets": ["E1-T01", "E1-T02", "E1-T03"],
-    "planPath": ".claude/handoffs/current/plan.md"
+    "tickets": ["E1-T01", "E1-T02", "E1-T03", "E1-T04"],
+    "planPath": ".claude/handoffs/current/plan.md",
+    "newTicket": "E1-T04",
+    "notes": "E1-T04 was added mid-sprint (not part of the original sprint 1 handoff) to add unit test coverage for E1-T01/T02/T03's existing functionality, following the human's decision that backend tickets now require unit tests going forward (CLAUDE.md 'Decisions Already Made' and 'Testing' sections updated accordingly). E1-T01 and E1-T02 are already merged; E1-T03 is being implemented to its original scope, without tests, by design. Only E1-T04 needs design work from you now — do not revisit design for E1-T01/T02/T03. In addition to E1-T04's technical design, please write an ADR documenting the process decision itself ('unit tests required for backend tickets going forward'), since this is a sprint-process/testing-policy decision, not just a code design decision for one ticket. The ADR is a separate artifact from E1-T04's design and both should go into the design PR per the contract's PR-hygiene rule (one design PR per sprint setup, together with plan.md/design.md/ADRs)."
   }
 }

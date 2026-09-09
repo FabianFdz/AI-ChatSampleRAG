@@ -1,7 +1,7 @@
 # Plan — E1: Backend Foundation
 
 ## Sprint Breakdown
-- Sprint 1: E1-T01, E1-T02, E1-T03
+- Sprint 1: E1-T01, E1-T02, E1-T03, E1-T04
 
 ## Tickets
 
@@ -35,6 +35,19 @@
 - Client requests a route that intentionally throws an error → server responds with a structured JSON error (not a raw stack trace) and stays running.
 - Client requests a nonexistent route (e.g., `GET /does-not-exist`) → server responds with a 404 JSON error instead of crashing or hanging.
 - Developer adds a new route file under `routes/` → it is wired into the server without editing the core error-handling logic in `index.ts`.
+
+### E1-T04: Unit Test Coverage for Backend Foundation — Sprint 1
+**Description:** As a developer maintaining this backend, I need unit test coverage for the Express bootstrap/env config (E1-T01), the health check endpoint (E1-T02), and the error handling/routing structure (E1-T03), so existing foundation behavior is protected against regressions going forward. This ticket adds tests only — it does not change any existing functionality or acceptance criteria from E1-T01/T02/T03.
+**Acceptance Criteria:**
+- Unit tests exist and pass for server bootstrap/env config behavior (e.g., default port vs. `PORT` env override) established in E1-T01.
+- Unit tests exist and pass for the `/health` endpoint's response (status code and JSON shape) established in E1-T02.
+- Unit tests exist and pass for the centralized error-handling middleware from E1-T03: unhandled route errors produce the structured JSON error response, and requests to unknown routes produce a 404 JSON error.
+- Test run is runnable via a single documented command (e.g., `pnpm test` from the backend package) and passes with zero failures.
+- No changes to existing E1-T01/T02/T03 runtime behavior — this ticket adds coverage, not new features.
+**E2E Flows:**
+- Developer runs the backend test command → tests for server startup/env config, health check, and error handling all execute and pass.
+- Developer intentionally breaks the health check response shape → the corresponding unit test fails, flagging the regression.
+- Developer intentionally removes the 404 handler → the corresponding unit test fails, flagging the regression.
 
 ## Out of Scope
 - Actual RAG/document/chat endpoints (E2, E3, E4).

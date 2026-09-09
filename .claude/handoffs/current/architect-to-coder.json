@@ -3,9 +3,11 @@
   "from": "architect",
   "to": "coder",
   "status": "approved",
-  "timestamp": "2026-09-08T22:48:23Z",
+  "timestamp": "2026-09-09T00:41:50Z",
   "payload": {
-    "tickets": ["E1-T01", "E1-T02", "E1-T03"],
-    "designPath": ".claude/handoffs/current/design.md"
+    "tickets": ["E1-T01", "E1-T02", "E1-T03", "E1-T04"],
+    "designPath": ".claude/handoffs/current/design.md",
+    "newTicket": "E1-T04",
+    "notes": "E1-T01/T02/T03 designs are unchanged — do not re-read them for new instructions. Only E1-T04 is new: see the 'E1-T04 — Unit Test Coverage for Backend Foundation' section in design.md, plus ADR-7 (testing policy) and ADR-8 (node:test + tsx, zero new dependencies). E1-T04 requires E1-T03 to be merged first, since two of its test files import T03's middleware. E1-T04 is tests-only: the sole permitted src/ change is extracting the pure `loadEnv(source)` seam in src/config/env.ts exactly as specified; if any other src/ change seems necessary, STOP and write to questions.md."
   }
 }
