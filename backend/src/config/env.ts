@@ -17,6 +17,8 @@ interface Env {
   readonly isDevelopment: boolean;
   readonly VOYAGE_API_KEY: string;
   readonly VOYAGE_EMBEDDING_MODEL: string;
+  readonly ANTHROPIC_API_KEY: string;
+  readonly ANTHROPIC_MODEL: string;
 }
 
 const NODE_ENVS: readonly NodeEnv[] = ['development', 'production', 'test'];
@@ -76,6 +78,15 @@ function parseLogLevel(raw: string | undefined): LogLevel {
 const DEFAULT_VOYAGE_EMBEDDING_MODEL = 'voyage-4-lite';
 
 /**
+ * Anthropic's current cheapest ("Haiku" tier) model id
+ * (docs.claude.com/en/docs/about-claude/models/overview, verified
+ * 2026-09-10): `claude-haiku-4-5-20251001`. Satisfies `CLAUDE.md`'s
+ * cost-driven decision to run the RAG engine on the cheapest available
+ * Claude tier.
+ */
+const DEFAULT_ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
+
+/**
  * A required secret: absent or blank throws at import time so the process
  * dies at startup rather than on the first embedding call.
  */
@@ -100,6 +111,28 @@ function parseVoyageEmbeddingModel(raw: string | undefined): string {
   return raw.trim();
 }
 
+/**
+ * Unset falls back to the default model constant; a **provided but blank**
+ * value fails fast instead. This is the opposite asymmetry from
+ * `parseVoyageEmbeddingModel` above, and it is intentional: an env file that
+ * explicitly sets `ANTHROPIC_MODEL=` most likely means to override it, so
+ * silently falling back would hide a typo'd or emptied deploy config. No
+ * allow-list — Anthropic's model list changes over time and hard-coding one
+ * here would go stale.
+ */
+function parseAnthropicModel(raw: string | undefined): string {
+  if (raw === undefined) {
+    return DEFAULT_ANTHROPIC_MODEL;
+  }
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    throw new Error(
+      'Invalid ANTHROPIC_MODEL: set it to a non-empty model id, or omit the variable entirely to use the default.',
+    );
+  }
+  return trimmed;
+}
+
 export function loadEnv(source: NodeJS.ProcessEnv): Env {
   const PORT = parsePort(source.PORT);
   const NODE_ENV = parseNodeEnv(source.NODE_ENV);
@@ -111,6 +144,11 @@ export function loadEnv(source: NodeJS.ProcessEnv): Env {
   const VOYAGE_EMBEDDING_MODEL = parseVoyageEmbeddingModel(
     source.VOYAGE_EMBEDDING_MODEL,
   );
+  const ANTHROPIC_API_KEY = parseRequiredSecret(
+    source.ANTHROPIC_API_KEY,
+    'ANTHROPIC_API_KEY',
+  );
+  const ANTHROPIC_MODEL = parseAnthropicModel(source.ANTHROPIC_MODEL);
 
   return Object.freeze({
     PORT,
@@ -119,6 +157,8 @@ export function loadEnv(source: NodeJS.ProcessEnv): Env {
     isDevelopment: NODE_ENV === 'development',
     VOYAGE_API_KEY,
     VOYAGE_EMBEDDING_MODEL,
+    ANTHROPIC_API_KEY,
+    ANTHROPIC_MODEL,
   });
 }
 

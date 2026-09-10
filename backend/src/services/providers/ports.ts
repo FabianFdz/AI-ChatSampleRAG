@@ -2,7 +2,8 @@
  * Provider ports for E3 (ADR-13, ADR-16). No HTTP, no vendor names, no
  * session awareness — this is the seam every unit test injects a fake into
  * (ADR-8) and the seam E3-T06's usage-guardrail decorator wraps. This file
- * grows across the sprint's tickets; E3-T01 adds only `EmbeddingClient`.
+ * grows across the sprint's tickets; E3-T01 adds `EmbeddingClient` and
+ * E3-T03 adds `ChatClient`.
  */
 
 /** Whether text is being embedded as a retrieval query or as a searchable document. */
@@ -15,4 +16,28 @@ export interface EmbeddingClient {
    * in.
    */
   embed(texts: string[], kind: EmbeddingInputKind): Promise<number[][]>;
+}
+
+/** Who a chat turn's content is attributed to. */
+export type ChatMessageRole = 'user' | 'assistant';
+
+/** One role-tagged chat message, project-owned — no LangChain message classes cross this boundary. */
+export interface ChatMessage {
+  role: ChatMessageRole;
+  content: string;
+}
+
+export interface ChatClient {
+  /**
+   * Streams the model's answer as an async iterable of text deltas, given a
+   * system instruction and an ordered list of role-tagged messages. There is
+   * deliberately no separate non-streaming method (ADR-14): the
+   * non-streaming path is accumulation over this same iterable, which is
+   * what makes "the stream concatenates to the same answer as `invoke`" a
+   * structural property rather than a hope.
+   */
+  streamAnswer(
+    systemPrompt: string,
+    messages: ChatMessage[],
+  ): AsyncIterable<string>;
 }

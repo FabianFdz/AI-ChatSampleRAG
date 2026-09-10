@@ -4,7 +4,10 @@ import { test } from 'node:test';
 import { env, loadEnv } from '../../src/config/env.js';
 
 /** A minimally valid source: every required variable set. */
-const validSource = { VOYAGE_API_KEY: 'test-voyage-key' };
+const validSource = {
+  VOYAGE_API_KEY: 'test-voyage-key',
+  ANTHROPIC_API_KEY: 'test-anthropic-key',
+};
 
 test('loadEnv applies all defaults given only the required variables', () => {
   const result = loadEnv(validSource);
@@ -13,6 +16,7 @@ test('loadEnv applies all defaults given only the required variables', () => {
   assert.equal(result.LOG_LEVEL, 'info');
   assert.equal(result.isDevelopment, true);
   assert.equal(result.VOYAGE_EMBEDDING_MODEL, 'voyage-4-lite');
+  assert.equal(result.ANTHROPIC_MODEL, 'claude-haiku-4-5-20251001');
 });
 
 test('loadEnv({ PORT: "4000" }) overrides PORT with a number', () => {
@@ -84,7 +88,7 @@ test('loadEnv rejects a blank VOYAGE_API_KEY', () => {
 });
 
 test('loadEnv accepts a VOYAGE_API_KEY with surrounding content preserved as-is', () => {
-  const result = loadEnv({ VOYAGE_API_KEY: 'sk-voyage-abc123' });
+  const result = loadEnv({ ...validSource, VOYAGE_API_KEY: 'sk-voyage-abc123' });
   assert.equal(result.VOYAGE_API_KEY, 'sk-voyage-abc123');
 });
 
@@ -104,4 +108,46 @@ test('loadEnv trims and accepts a provided VOYAGE_EMBEDDING_MODEL, with no allow
     VOYAGE_EMBEDDING_MODEL: '  some-future-model  ',
   });
   assert.equal(result.VOYAGE_EMBEDDING_MODEL, 'some-future-model');
+});
+
+test('loadEnv({ VOYAGE_API_KEY }) throws: ANTHROPIC_API_KEY is required', () => {
+  assert.throws(
+    () => loadEnv({ VOYAGE_API_KEY: 'test-voyage-key' }),
+    /ANTHROPIC_API_KEY/,
+  );
+});
+
+test('loadEnv rejects a blank ANTHROPIC_API_KEY', () => {
+  assert.throws(
+    () => loadEnv({ ...validSource, ANTHROPIC_API_KEY: '   ' }),
+    /ANTHROPIC_API_KEY/,
+  );
+});
+
+test('loadEnv accepts an ANTHROPIC_API_KEY preserved as-is', () => {
+  const result = loadEnv({
+    ...validSource,
+    ANTHROPIC_API_KEY: 'sk-anthropic-abc123',
+  });
+  assert.equal(result.ANTHROPIC_API_KEY, 'sk-anthropic-abc123');
+});
+
+test('loadEnv defaults ANTHROPIC_MODEL to claude-haiku-4-5-20251001 when unset', () => {
+  const result = loadEnv(validSource);
+  assert.equal(result.ANTHROPIC_MODEL, 'claude-haiku-4-5-20251001');
+});
+
+test('loadEnv rejects a set-but-blank ANTHROPIC_MODEL rather than defaulting it', () => {
+  assert.throws(
+    () => loadEnv({ ...validSource, ANTHROPIC_MODEL: '   ' }),
+    /Invalid ANTHROPIC_MODEL/,
+  );
+});
+
+test('loadEnv trims and accepts a provided ANTHROPIC_MODEL, with no allow-list', () => {
+  const result = loadEnv({
+    ...validSource,
+    ANTHROPIC_MODEL: '  some-future-model  ',
+  });
+  assert.equal(result.ANTHROPIC_MODEL, 'some-future-model');
 });
