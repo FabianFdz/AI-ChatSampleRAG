@@ -11,6 +11,7 @@
     "test": "NODE_ENV=test LOG_LEVEL=silent VOYAGE_API_KEY=test-placeholder-voyage-key ANTHROPIC_API_KEY=test-placeholder-anthropic-key node --import tsx --test \"tests/**/*.test.ts\""
   },
   "dependencies": {
+    "@langchain/anthropic": "^1.5.9",
     "@langchain/core": "^1.2.9",
     "@langchain/textsplitters": "^1.0.1",
     "dotenv": "^17.4.2",
