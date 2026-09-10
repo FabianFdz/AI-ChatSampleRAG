@@ -2,7 +2,7 @@
   "sprint": 3,
   "plan": "done",
   "designPr": "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/17",
-  "designMerged": "pending",
+  "designMerged": "done",
   "tickets": {
     "E3-T01": {
       "design": "done",
@@ -49,5 +49,5 @@
   },
   "docsUpdated": "pending",
   "sprintStatus": "in_progress",
-  "updatedAt": "2026-09-10T01:05:05Z"
+  "updatedAt": "2026-09-10T04:58:09Z"
 }
