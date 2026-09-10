@@ -519,10 +519,14 @@ the guardrail.
 5. **No TTL or eviction on the session map** (ADR-15). Fine for a single-user
    PoC that is restarted often; E4 or E8 is where an idle timeout belongs if
    the app is ever left running.
-6. **A session clear resets the usage budgets** (ADR-16), so anyone able to
-   clear sessions can reset the cap. Real quota enforcement needs identity,
-   which this PoC does not have — the broader rate-limiting concern stays
-   deferred, as the plan scopes it.
+6. **A session clear resets the usage budgets** (ADR-16) as designed in E3 —
+   no change to E3's tickets. ADR-16's amendment gives E4 a concrete plan to
+   close this: an `httpOnly` client-id cookie issued at session creation,
+   charged/read instead of the session id, so a session clear (or a fresh
+   session) no longer resets a browser's budget. This is not authentication —
+   clearing cookies still resets it — and answers E4's own *To settle*
+   question ("rate limiting — per session, per IP?") as **per client-id
+   cookie**, not per IP. The Planner should turn this into an E4 ticket.
 7. **Two required env variables land this sprint.** Any environment that runs
    the backend — a future CI job, a deployment, a fresh clone — now fails at
    startup without `VOYAGE_API_KEY` and `ANTHROPIC_API_KEY`. `.env.example` and

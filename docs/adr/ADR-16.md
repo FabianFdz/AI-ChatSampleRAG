@@ -165,3 +165,38 @@ a 2× margin, and records the arithmetic in a comment beside the constants.
   nicely at the call site, but it creates the parallel error channel sprint 2
   argued against: every caller would unwrap it and re-throw into ADR-5's
   envelope anyway.
+
+## Amendment (2026-09-09)
+Human review flagged the "a caller who can clear sessions can reset the cap"
+consequence above as worth closing rather than just accepting. Documented here
+as a concrete plan for **E4** — no scope change to E3's tickets in this
+sprint, none of E3-T01..T06 is touched by this amendment.
+
+**Plan for E4:** on session creation, issue an opaque, random **client id** as
+an `httpOnly`, `SameSite=Strict` cookie (e.g. `chatrag_client_id`) if the
+request doesn't already carry one. E4's session-lifecycle layer (which ADR-15
+already assigns ownership of "session valid / not valid" to) keeps a mapping
+from client id to the session id(s) it has created, and usage budgets (this
+ADR) are charged and read **against the client id**, not the session id — so
+starting a fresh session, or explicitly clearing one, no longer resets that
+browser's budget. E3's own registry (ADR-15) is unaffected: it still keys
+everything by session id, exactly as designed; E4 adds the client-id layer
+above it rather than changing what E3 stores.
+
+This is **still not authentication** and is not claimed to be: a client that
+clears cookies or switches browser/incognito gets a fresh budget. The bar
+being raised is "clicking clear session," not identity spoofing. Real quota
+enforcement needs accounts, which stays explicitly out of scope, as the plan
+already said.
+
+**IP address as the secondary key was considered and rejected** for this same
+plan: shared IPs (NAT, corporate networks, mobile carriers) would incorrectly
+merge distinct legitimate users into one budget, and — same as the
+cookie approach — it can only be read at the HTTP layer (E4), so it carries
+no advantage over a cookie while being less precise.
+
+This amendment answers E4's own *To settle* question ("Rate limiting strategy
+— per session, per IP?") in advance: **per client-id cookie**, not per
+session and not per IP. The Planner should turn this into an E4 ticket
+(session creation + client-id cookie + re-keying the usage snapshot lookup)
+rather than rediscovering the question from scratch.
