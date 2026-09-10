@@ -1,14 +1,5 @@
-/**
- * The only module in the repo that knows `@langchain/anthropic`/Claude
- * exists (ADR-14). Nothing Anthropic-shaped crosses back out: a thrown
- * provider error, and a mid-stream provider throw, both become `LLM_FAILED`
- * (502), with the real cause logged and never returned (ADR-5).
- *
- * `createAnthropicChatClient` takes the chat model as a parameter purely so
- * tests can inject a fake implementing the same one-method shape (ADR-8 — no
- * module mocking). `anthropicChatClient()` is the production singleton the
- * provider registry resolves.
- */
+// The only module that knows @langchain/anthropic exists. Provider errors
+// (initial or mid-stream) map to LLM_FAILED, never leaking the raw cause.
 
 import { ChatAnthropic } from '@langchain/anthropic';
 import {
@@ -22,25 +13,16 @@ import { llmFailedError } from '../../errors/ragErrors.js';
 import { logger } from '../../utils/logger.js';
 import type { ChatClient, ChatMessage } from './ports.js';
 
-/**
- * Bounds the cost of any single answer — also what caps E3-T06's per-call
- * overshoot, since the guardrail can only budget for a call whose maximum
- * spend is known ahead of time.
- */
+// Bounds the cost of any single answer.
 export const ANTHROPIC_MAX_OUTPUT_TOKENS = 1024;
 
-/**
- * Explicit, replacing the Anthropic SDK's own defaults (10 minute timeout,
- * 2 retries) for the same reason ADR-13 sets Voyage's explicitly: a hidden
- * retry would silently double-spend, which is exactly what E3-T06's usage
- * guardrail exists to prevent, and an unbounded timeout would hang the
- * caller instead of failing loudly.
- */
+// Explicit, replacing the SDK's defaults (10min timeout, 2 retries) — a
+// hidden retry would silently double-spend against E3-T06's usage guardrail.
 const REQUEST_TIMEOUT_MS = 30_000;
 
 type AnthropicMessage = SystemMessage | HumanMessage | AIMessage;
 
-/** The minimal shape this adapter depends on — satisfied by the real `ChatAnthropic` and by test fakes. */
+// The minimal shape this adapter depends on — satisfied by ChatAnthropic and test fakes.
 export interface AnthropicChatApi {
   stream(messages: AnthropicMessage[]): Promise<AsyncIterable<{ text: string }>>;
 }
@@ -59,10 +41,7 @@ function toAnthropicMessages(
   ];
 }
 
-/**
- * Wraps `chatModel` (the real SDK-backed model in production, a fake in
- * tests) as our project-owned `ChatClient` port.
- */
+// Wraps chatModel (real in production, a fake in tests) as our ChatClient port.
 export function createAnthropicChatClient(
   chatModel: AnthropicChatApi,
 ): ChatClient {

@@ -28,14 +28,8 @@ export interface ChatMessage {
 }
 
 export interface ChatClient {
-  /**
-   * Streams the model's answer as an async iterable of text deltas, given a
-   * system instruction and an ordered list of role-tagged messages. There is
-   * deliberately no separate non-streaming method (ADR-14): the
-   * non-streaming path is accumulation over this same iterable, which is
-   * what makes "the stream concatenates to the same answer as `invoke`" a
-   * structural property rather than a hope.
-   */
+  // No separate non-streaming method: invoke just accumulates this stream,
+  // making "same answer either way" structural rather than a hope (ADR-14).
   streamAnswer(
     systemPrompt: string,
     messages: ChatMessage[],

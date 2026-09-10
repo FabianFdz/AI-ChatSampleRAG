@@ -77,13 +77,7 @@ function parseLogLevel(raw: string | undefined): LogLevel {
  */
 const DEFAULT_VOYAGE_EMBEDDING_MODEL = 'voyage-4-lite';
 
-/**
- * Anthropic's current cheapest ("Haiku" tier) model id
- * (docs.claude.com/en/docs/about-claude/models/overview, verified
- * 2026-09-10): `claude-haiku-4-5-20251001`. Satisfies `CLAUDE.md`'s
- * cost-driven decision to run the RAG engine on the cheapest available
- * Claude tier.
- */
+// Cheapest Claude tier per CLAUDE.md; verified against Anthropic's docs 2026-09-10.
 const DEFAULT_ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
 
 /**
@@ -111,15 +105,8 @@ function parseVoyageEmbeddingModel(raw: string | undefined): string {
   return raw.trim();
 }
 
-/**
- * Unset falls back to the default model constant; a **provided but blank**
- * value fails fast instead. This is the opposite asymmetry from
- * `parseVoyageEmbeddingModel` above, and it is intentional: an env file that
- * explicitly sets `ANTHROPIC_MODEL=` most likely means to override it, so
- * silently falling back would hide a typo'd or emptied deploy config. No
- * allow-list — Anthropic's model list changes over time and hard-coding one
- * here would go stale.
- */
+// Opposite of parseVoyageEmbeddingModel: unset falls back to the default,
+// but a set-but-blank value fails fast (likely a typo'd override).
 function parseAnthropicModel(raw: string | undefined): string {
   if (raw === undefined) {
     return DEFAULT_ANTHROPIC_MODEL;

@@ -1,9 +1,5 @@
-/**
- * Pure context/prompt-assembly helpers for E3-T03. No I/O, no branching of
- * their own — `ragGraph.service.ts`'s `generate` node calls these rather
- * than the graph having separate "format" / "prompt" nodes for them (ADR-14:
- * two graph nodes, not the epic's four-stage wording).
- */
+// Pure context/prompt-assembly helpers, called from ragGraph.service.ts's
+// `generate` node (kept as helpers, not separate graph nodes — ADR-14).
 
 import type { ChatMessage } from './providers/ports.js';
 import type { RetrievedChunk } from './rag.types.js';
@@ -29,23 +25,15 @@ function formatChunk(chunk: RetrievedChunk, position: number): string {
   return `[${String(position)}] Source: ${chunk.metadata.source}${pageSuffix}\n${chunk.text}`;
 }
 
-/**
- * Renders `retrievedChunks` as a numbered, source-attributed block, in the
- * order they were retrieved (already ranked by descending score by
- * `searchIndex`).
- */
+// Numbered, source-attributed block, in the order retrieved (already
+// ranked by score).
 export function buildContextBlock(retrievedChunks: RetrievedChunk[]): string {
   return retrievedChunks
     .map((chunk, index) => formatChunk(chunk, index + 1))
     .join('\n\n');
 }
 
-/**
- * Builds the ordered message list `generate` sends to the chat client:
- * a single user turn carrying the retrieved context followed by the
- * question. T03 is single-turn only — prior conversation turns are E3-T05's
- * concern.
- */
+// Single user turn carrying context + question — multi-turn is E3-T05's scope.
 export function buildMessages(
   question: string,
   retrievedChunks: RetrievedChunk[],

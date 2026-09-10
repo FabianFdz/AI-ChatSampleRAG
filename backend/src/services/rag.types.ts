@@ -58,12 +58,7 @@ export interface SessionState {
   vectorIndex: VectorIndexEntry[];
 }
 
-/**
- * `chat.service.ts`'s public result (E3-T03) — the question that was asked,
- * the answer text, and the retrieved chunks' attribution as sources (empty
- * on the no-context path). Plain, JSON-serialisable, matching E2/E3's other
- * public shapes so E4 can return it from a route unmapped.
- */
+// chat.service.ts's public result; sources is empty on the no-context path.
 export interface RagAnswer {
   question: string;
   answer: string;
@@ -85,11 +80,7 @@ export const RAG = Object.freeze({
    * provider; retuning is one constant (flagged for E8).
    */
   minRelevanceScore: 0.5,
-  /**
-   * The fixed answer returned when retrieval finds no chunk scoring above
-   * `minRelevanceScore` (ADR-14). The graph never calls the LLM on this
-   * path — this string is the entire answer.
-   */
+  // Returned when no chunk scores above minRelevanceScore — no LLM call made.
   noContextAnswer:
     "I don't have relevant information in your documents to answer that question.",
 });
