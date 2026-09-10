@@ -33,6 +33,19 @@ export interface VectorIndexEntry {
 }
 
 /**
+ * A chunk retrieved from a session's vector index, carrying its similarity
+ * score. Attribution (`metadata`) survives retrieval intact; formatting it
+ * for display is E4/E7's job.
+ */
+export interface RetrievedChunk {
+  chunkId: string;
+  documentId: string;
+  text: string;
+  metadata: ChunkMetadata;
+  score: number;
+}
+
+/**
  * Per-session state (ADR-15). **One** record per session id, holding every
  * per-session concern E3 has — so a session clear is one operation that
  * cannot leave any of them out of sync. This type grows across the sprint's
@@ -43,3 +56,19 @@ export interface SessionState {
   sessionId: string;
   vectorIndex: VectorIndexEntry[];
 }
+
+/**
+ * Frozen RAG tuning constants, mirroring E2's `DOCUMENT_PROCESSING`. This
+ * object grows across the sprint's tickets; E3-T02 adds the search knobs.
+ */
+export const RAG = Object.freeze({
+  /** Search returns at most this many results (the AC's number). */
+  topK: 3,
+  /**
+   * Minimum cosine similarity a result must reach to be returned. A
+   * starting value for normalised Voyage cosine scores — record the
+   * observed on-topic/off-topic spread here once run against the real
+   * provider; retuning is one constant (flagged for E8).
+   */
+  minRelevanceScore: 0.5,
+});
