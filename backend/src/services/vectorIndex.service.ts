@@ -12,6 +12,7 @@
 
 import { AppError } from '../errors/AppError.js';
 import { embeddingDimensionMismatchError } from '../errors/ragErrors.js';
+import { logger } from '../utils/logger.js';
 import { RAG } from './rag.types.js';
 import type {
   EmbeddedChunk,
@@ -58,11 +59,16 @@ function dotProduct(a: number[], b: number[]): number {
 /**
  * Throws `embeddingDimensionMismatchError` if `dimension` doesn't match
  * `expectedDimension`. A mismatch means a model changed mid-session — our
- * own bug, not user input.
+ * own bug, not user input. The actual dimensions are logged server-side
+ * only; they do not belong in the client-facing error (ADR-5, ADR-13).
  */
 function assertDimension(expectedDimension: number, dimension: number): void {
   if (dimension !== expectedDimension) {
-    throw embeddingDimensionMismatchError(expectedDimension, dimension);
+    logger.error(
+      { expectedDimension, actualDimension: dimension },
+      'vectorIndex: embedding vector dimension does not match session index',
+    );
+    throw embeddingDimensionMismatchError();
   }
 }
 

@@ -24,16 +24,16 @@ export function embeddingFailedError(): AppError {
 /**
  * A vector being indexed or searched does not share the rest of the
  * session's vector index dimension. This is our own bug (a model changed
- * mid-session), not user input, hence the 500 (ADR-12).
+ * mid-session), not user input, hence the 500 (ADR-12). `details` is
+ * field-validation-only (ADR-5); the mismatched dimensions are internal
+ * vector-index state, so the caller logs them server-side before throwing
+ * and none of it is carried in `details` (ADR-5, ADR-13) — same pattern as
+ * `embeddingFailedError` above.
  */
-export function embeddingDimensionMismatchError(
-  expectedDimension: number,
-  actualDimension: number,
-): AppError {
+export function embeddingDimensionMismatchError(): AppError {
   return new AppError(
     500,
     'EMBEDDING_DIMENSION_MISMATCH',
     "Embedding vector dimension does not match this session's index.",
-    { expectedDimension, actualDimension },
   );
 }
