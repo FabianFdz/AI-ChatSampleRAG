@@ -96,3 +96,49 @@ with Node's global `fetch`, from a single adapter module
 - **A local/offline embedding model.** No API cost at all, but it means a
   hundreds-of-megabytes model download and CPU inference in a PoC, and it
   contradicts `CLAUDE.md`'s explicit Voyage decision.
+
+## Amendment (2026-09-09)
+Overruled at human review, before the design PR merged: use the official
+**`voyageai` SDK** (`VoyageAIClient`) instead of a hand-rolled `fetch` call,
+trading the zero-dependency footprint above for the maintenance signal an
+official client gives — version-tracked request/response shapes and
+deprecation warnings ahead of a breaking API change, rather than discovering
+the change when a production call starts failing. That risk (Voyage changing
+its API under us) is exactly what this ADR's own "if Voyage changes its
+response shape, exactly one module breaks" consequence was pricing — the
+correction is *who* notices first, not whether the adapter stays isolated.
+
+Re-checked against the registry before writing this amendment
+(`voyageai@0.4.0`, current latest):
+
+- Its **only real dependency** is `node-fetch@^2.7.0` — a fetch polyfill,
+  irrelevant weight next to what it replaces (this project has had global
+  `fetch` since before E1). `@huggingface/transformers` and `onnxruntime-node`
+  are declared **`optional: true`** in the SDK's own `package.json`
+  (`peerDependenciesMeta`), so `pnpm install` does not fetch them and there is
+  no `approve-builds` prompt — this ADR's original wording ("optional peers")
+  already had that right; it is reaffirmed here because it is the fact that
+  makes the SDK's actual cost small.
+- `VoyageAIClient.embed()` still returns `data[].embedding` / `data[].index`
+  in the same shape this ADR already documented — the sort-by-index and
+  count-assertion logic is unaffected.
+- **Load-bearing gotcha:** `VoyageAIClient`'s default `maxRetries` is **2**.
+  An unconfigured client would retry a failed embed call automatically, which
+  is precisely the silent double-spend ADR-16's guardrail exists to prevent
+  (ADR-16 charges *before* delegating, once; a hidden retry charges once but
+  can cause two provider calls). The adapter **must** construct the client
+  with `maxRetries: 0` and pass its own `timeoutInSeconds` (replacing the
+  hand-rolled `AbortSignal.timeout`) so both the retry policy and the timeout
+  stay explicit, in this ADR's control, rather than the SDK's default.
+- The SDK throws its own `VoyageAIError` / `VoyageAITimeoutError` on failure
+  in place of a raw `fetch` rejection or a non-2xx response. The adapter
+  catches these (not `fetch`-shaped errors) but the outward contract this ADR
+  already fixed is unchanged: every failure still becomes `EMBEDDING_FAILED`
+  (502) with the real status/body logged and never returned (ADR-5).
+
+Everything else in this ADR's Decision and Consequences stands: one adapter
+module is still the only place that knows Voyage exists, the port
+(`EmbeddingClient`) is unchanged, and the "Alternatives rejected" section
+above is left as the record of what was true when this ADR was first written
+— it no longer states the current decision on SDK-vs-`fetch`, only the
+reasoning that was superseded.

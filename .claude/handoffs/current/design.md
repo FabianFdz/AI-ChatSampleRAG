@@ -8,7 +8,7 @@ before coding; this file is the "how".
 | ADR | Decision |
 |---|---|
 | ADR-12 | Session vector search is brute-force cosine over a plain array, **not LanceDB** |
-| ADR-13 | Voyage embeddings via its REST API with global `fetch`, behind our own port |
+| ADR-13 | Voyage embeddings via the official `voyageai` SDK (amended from `fetch`), behind our own port |
 | ADR-14 | **One** LangGraph graph serves both streaming and non-streaming; sliding-window history |
 | ADR-15 | E3 owns **one** in-memory session-state registry; E4 layers HTTP on it |
 | ADR-16 | The usage guardrail is a **decorator on the provider ports**, budgeted in calls + characters |
@@ -39,7 +39,7 @@ New in this sprint:
 | `src/services/rag.types.ts` | T01 | Project-owned E3 types + the frozen `RAG` tuning constants and `USAGE_LIMITS` object |
 | `src/errors/ragErrors.ts` | T01 | E3's error-factory vocabulary, mirroring `documentErrors.ts` |
 | `src/services/providers/ports.ts` | T01 | The two provider port interfaces (embedding, chat) — no HTTP, no vendor names |
-| `src/services/providers/voyageEmbeddingClient.ts` | T01 | Voyage REST adapter |
+| `src/services/providers/voyageEmbeddingClient.ts` | T01 | Voyage adapter over the `voyageai` SDK |
 | `src/services/providers/providerRegistry.ts` | T01 | The **single** construction site for provider clients |
 | `src/services/embedding.service.ts` | T01 | Chunk-batch and query embedding |
 | `src/services/sessionState.service.ts` | T02 | The one session-keyed registry (ADR-15) |
@@ -52,7 +52,8 @@ New in this sprint:
 | `src/services/providers/governedClients.ts` | T06 | The two guardrail decorators |
 
 Modified: `src/config/env.ts` (T01, T03), `backend/.env.example` (T01, T03),
-`backend/package.json` (T01 test script + T03 dependencies).
+`backend/package.json` (T01 test script + `voyageai` dependency, T03
+`@langchain/langgraph` + `@langchain/anthropic` dependencies).
 
 Tests mirror `src/` under `backend/tests/services/`, per ADR-8.
 
@@ -72,17 +73,21 @@ Voyage, no session. This is the seam every unit test injects a fake into
 (ADR-8) and the seam T06 decorates (ADR-16).
 
 **The adapter** (`voyageEmbeddingClient.ts`) is the only module in the repo
-that knows Voyage exists. Per ADR-13 it posts to Voyage's `/v1/embeddings`
-endpoint with global `fetch`, bearer auth from the env module, an explicit
-`AbortSignal.timeout`, and maps the input-kind discriminator onto Voyage's
-document/query input-type field. Verify against Voyage's current docs at
-implementation time (ADR-6's convention): the exact request field names, the
-current model id to use as the default, the maximum inputs and maximum tokens
-per request, and the free-tier terms. Encode the per-request maxima as named
-constants in this module. Nothing Voyage-shaped crosses back out — a non-2xx
-response, a transport throw, or a response whose shape does not match all
-become `EMBEDDING_FAILED` (502) with the real status and body logged, never
-returned (ADR-5). Voyage returns embeddings with an index field; sort or map by
+that knows Voyage exists. Per ADR-13's amendment it wraps the official
+**`voyageai` SDK**'s `VoyageAIClient`, constructed once with the API key from
+the env module, **`maxRetries: 0`** and an explicit `timeoutInSeconds` — both
+set explicitly rather than left at the SDK's defaults, because its default
+`maxRetries` is 2 and a hidden retry is exactly the silent double-spend
+ADR-16's guardrail exists to prevent. Calls `client.embed({ input, model,
+inputType })`, mapping the input-kind discriminator onto Voyage's
+document/query `inputType` field. Verify against Voyage's current docs at
+implementation time (ADR-6's convention): the current model id to use as the
+default, the maximum inputs and maximum tokens per request, and the free-tier
+terms. Encode the per-request maxima as named constants in this module.
+Nothing Voyage-shaped crosses back out — a thrown `VoyageAIError` /
+`VoyageAITimeoutError`, or a response whose shape does not match, all become
+`EMBEDDING_FAILED` (502) with the real status and body logged, never returned
+(ADR-5). The response's `data[]` items carry an `index` field; sort or map by
 it rather than trusting positional order, then assert the count matches the
 input count.
 
