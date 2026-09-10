@@ -14,7 +14,7 @@
     "E3-T02": {
       "design": "done",
       "code": "done",
-      "codeReview": "rejected",
+      "codeReview": "pending",
       "status": "pending",
       "merged": "pending"
     },
@@ -49,5 +49,5 @@
   },
   "docsUpdated": "pending",
   "sprintStatus": "in_progress",
-  "updatedAt": "2026-09-10T05:31:24Z"
+  "updatedAt": "2026-09-10T05:36:07Z"
 }
