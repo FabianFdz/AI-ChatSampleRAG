@@ -1,0 +1,53 @@
+{
+  "sprint": 3,
+  "plan": "done",
+  "designPr": null,
+  "designMerged": "pending",
+  "tickets": {
+    "E3-T01": {
+      "design": "done",
+      "code": "pending",
+      "codeReview": "pending",
+      "status": "pending",
+      "merged": "pending"
+    },
+    "E3-T02": {
+      "design": "done",
+      "code": "pending",
+      "codeReview": "pending",
+      "status": "pending",
+      "merged": "pending"
+    },
+    "E3-T03": {
+      "design": "done",
+      "code": "pending",
+      "codeReview": "pending",
+      "status": "pending",
+      "merged": "pending"
+    },
+    "E3-T04": {
+      "design": "done",
+      "code": "pending",
+      "codeReview": "pending",
+      "status": "pending",
+      "merged": "pending"
+    },
+    "E3-T05": {
+      "design": "done",
+      "code": "pending",
+      "codeReview": "pending",
+      "status": "pending",
+      "merged": "pending"
+    },
+    "E3-T06": {
+      "design": "done",
+      "code": "pending",
+      "codeReview": "pending",
+      "status": "pending",
+      "merged": "pending"
+    }
+  },
+  "docsUpdated": "pending",
+  "sprintStatus": "in_progress",
+  "updatedAt": "2026-09-10T01:05:05Z"
+}

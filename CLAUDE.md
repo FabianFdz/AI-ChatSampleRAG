@@ -9,7 +9,7 @@ A Proof-of-Concept RAG (Retrieval-Augmented Generation) application where users 
 - **Frontend:** Next.js (React) with TypeScript
 - **Backend:** Node.js/Express with TypeScript
 - **RAG Engine:** LangChain + LangGraph
-- **LLM:** Anthropic Claude API
+- **LLM:** Anthropic Claude API — Haiku tier (cheapest available Claude model), for cost reasons
 - **Embeddings:** Voyage AI (Anthropic's recommended embeddings partner — Claude itself has no embeddings endpoint)
 - **Storage:** In-memory (PoC - no persistence)
 - **API:** REST endpoints
@@ -88,6 +88,8 @@ ai-chat-rag/
 - ✅ LangChain + LangGraph for RAG
 - ✅ Unit tests required for backend tickets going forward (2026-09-09), superseding the earlier "no tests" PoC note below
 - ✅ LLM switched from OpenAI to Anthropic Claude API (2026-09-08); embeddings use Voyage AI since Claude has no embeddings endpoint — supersedes the "OpenAI API" line this file used to have and the OpenAI mentions in E3's scope
+- ✅ Use the cheapest available Claude model tier (Haiku) for the LLM, not a mid/top-tier model (2026-09-08) — this is a cost-driven PoC, verify the exact current Haiku model id against Anthropic's docs at implementation time rather than hard-coding one here
+- ✅ The Claude model id is configurable via an env var (default: the Haiku model above), not hard-coded (2026-09-08) — follows ADR-3's env-config module pattern
 
 ### If New Decisions Needed
 - Ask before implementing
