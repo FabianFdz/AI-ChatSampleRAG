@@ -3,13 +3,15 @@
   "from": "coder",
   "to": "reviewer",
   "status": "approved",
-  "timestamp": "2026-09-10T05:36:07Z",
+  "timestamp": "2026-09-10T06:26:59Z",
   "payload": {
-    "ticket": "E3-T02",
+    "ticket": "E3-T03",
     "prs": [
-      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/21",
-      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/22"
+      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/23",
+      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/24",
+      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/25",
+      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/26"
     ],
-    "notes": "Fixup for the rejection in reviewer-to-coder.json: embeddingDimensionMismatchError (backend/src/errors/ragErrors.ts) no longer takes expectedDimension/actualDimension or puts anything in AppError's `details` — matches embeddingFailedError's existing ADR-5/ADR-13 pattern, doc comment updated accordingly. The dimension values are now logged server-side only, at the one call site (assertDimension in backend/src/services/vectorIndex.service.ts) via logger.error before throwing, same pattern voyageEmbeddingClient.ts already uses around embeddingFailedError(). Both call sites in vectorIndex.service.ts pick up the new no-arg factory signature automatically (they already just called `throw embeddingDimensionMismatchError(...)` through assertDimension). No other changes — everything else in PR #21/#22 was already reviewed clean. Commit 62f258a pushed to the existing sprint/3/e3-t02-vector-index-search branch (PR #22), no new PR opened. Full suite (119 tests) green and typecheck clean on the branch tip after the fix."
+    "notes": "Split into 4 stacked PRs (main -> #23 -> #24 -> #25 -> #26, each verified in isolation with a clean pnpm typecheck/test), the same pattern E3-T01 used, since this ticket's full diff (~1000 lines incl. lockfile) is well over the ~400-line review ceiling. #23: ANTHROPIC_API_KEY/ANTHROPIC_MODEL in env.ts (verified claude-haiku-4-5-20251001 against Anthropic's current model docs), the ChatClient port, llmFailedError. #24: anthropicChatClient.ts (the only module that knows @langchain/anthropic exists) and providerRegistry.ts's getChatClient, both adding @langchain/anthropic@^1.5.9. #25: promptBuilder.ts's pure prompt/context helpers. #26 (completes the ticket): ragGraph.service.ts -- the one compiled LangGraph StateGraph (ADR-14) with exactly two nodes (retrieve, generate) and a conditional edge to END on zero relevant chunks (no LLM call at all) -- plus chat.service.ts's answerQuestion(sessionId, question) public entry point, adding @langchain/langgraph@^1.4.14. Both new LangGraph/Anthropic deps resolved cleanly against the versions ADR-14 verified, no peer warnings. Tests build and run the real compiled graph against injected fakes (ragGraph.test.ts, ADR-8, no module mocking): a grounded answer whose prompt provably contains the retrieved chunk text; the no-context path returns RAG.noContextAnswer and asserts the fake chat client is never called (the anti-fabrication guarantee); a chat-provider failure and an embedding failure both surface unwrapped as AppError (LLM_FAILED/EMBEDDING_FAILED), matching ADR-14's verified unwrapped-error behaviour. anthropicChatClient.test.ts separately covers the adapter's own error mapping (initial-call throw and mid-stream throw both become LLM_FAILED without leaking the provider cause) and its message-role mapping. Full suite is 140 tests, green, at the tip of #26 (which already contains every prior PR's commits). llmFailedError carries nothing in AppError's `details` -- checked errorHandler.ts's echo behaviour before writing it, same pattern as embeddingFailedError/embeddingDimensionMismatchError. status.json's E3-T03 entry (code: done, codeReview: pending) is committed in #26 per the fold-bookkeeping-into-the-open-PR rule."
   }
 }
