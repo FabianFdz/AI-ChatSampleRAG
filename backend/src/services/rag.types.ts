@@ -1,7 +1,8 @@
 /**
  * Project-owned types for E3 (RAG engine). This file grows across the
- * sprint's tickets; E3-T01 adds only what the embedding path needs and
- * E3-T02 adds the session-state / vector-index shapes.
+ * sprint's tickets; E3-T01 adds only what the embedding path needs, E3-T02
+ * adds the session-state / vector-index shapes, and E3-T03 adds the public
+ * answer shape.
  *
  * Plain, JSON-serialisable data, matching E2's `document.types.ts` style —
  * except the embedding vectors themselves, which never leave the embedding /
@@ -58,8 +59,21 @@ export interface SessionState {
 }
 
 /**
+ * `chat.service.ts`'s public result (E3-T03) — the question that was asked,
+ * the answer text, and the retrieved chunks' attribution as sources (empty
+ * on the no-context path). Plain, JSON-serialisable, matching E2/E3's other
+ * public shapes so E4 can return it from a route unmapped.
+ */
+export interface RagAnswer {
+  question: string;
+  answer: string;
+  sources: RetrievedChunk[];
+}
+
+/**
  * Frozen RAG tuning constants, mirroring E2's `DOCUMENT_PROCESSING`. This
- * object grows across the sprint's tickets; E3-T02 adds the search knobs.
+ * object grows across the sprint's tickets; E3-T02 adds the search knobs and
+ * E3-T03 adds the no-context fixed answer.
  */
 export const RAG = Object.freeze({
   /** Search returns at most this many results (the AC's number). */
@@ -71,4 +85,11 @@ export const RAG = Object.freeze({
    * provider; retuning is one constant (flagged for E8).
    */
   minRelevanceScore: 0.5,
+  /**
+   * The fixed answer returned when retrieval finds no chunk scoring above
+   * `minRelevanceScore` (ADR-14). The graph never calls the LLM on this
+   * path — this string is the entire answer.
+   */
+  noContextAnswer:
+    "I don't have relevant information in your documents to answer that question.",
 });
