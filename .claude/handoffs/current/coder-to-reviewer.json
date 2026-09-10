@@ -1,0 +1,16 @@
+{
+  "sprint": 3,
+  "from": "coder",
+  "to": "reviewer",
+  "status": "approved",
+  "timestamp": "2026-09-10T05:13:01Z",
+  "payload": {
+    "ticket": "E3-T01",
+    "prs": [
+      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/18",
+      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/19",
+      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/20"
+    ],
+    "notes": "Split into three stacked PRs (combined diff was ~750 lines including the lockfile, over the 400-line hard ceiling), same pattern as E2-T04. #18 (branch sprint/3/e3-t01-embedding-config, base main): VOYAGE_API_KEY/VOYAGE_EMBEDDING_MODEL in env.ts, EmbeddingClient port, EMBEDDING_FAILED error, EmbeddedChunk type, test-script placeholder key. #19 (branch sprint/3/e3-t01-voyage-adapter, base #18's branch): voyageai@0.4.0 dependency, voyageEmbeddingClient.ts (VoyageAIClient with maxRetries:0 + explicit timeoutInSeconds per ADR-13's amendment), providerRegistry.ts (getEmbeddingClient(sessionId) — sessionId intentionally unused, seam for E3-T06/ADR-16). #20 (branch sprint/3/e3-t01-embedding-service, base #19's branch): embedding.service.ts (embedChunks/embedQuery, sequential batching respecting Voyage's verified per-request maxima). Merge #18, #19, #20 in that order. Model id (voyage-4-lite) and per-request maxima (1,000 inputs, ~1M-token budget) verified against Voyage's current docs at implementation time, not carried from memory. Full suite (104 tests) passes with all three PRs' files present; typecheck, build, and start (serves /health, fails fast without VOYAGE_API_KEY) all verified. Also verified each PR's diff typechecks/tests standalone (with later PRs' files temporarily removed) before committing."
+  }
+}
