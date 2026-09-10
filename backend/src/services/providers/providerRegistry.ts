@@ -21,14 +21,8 @@ export function getEmbeddingClient(sessionId: string): EmbeddingClient {
   return voyageEmbeddingClient();
 }
 
-/**
- * Returns the chat client for `sessionId`.
- *
- * `sessionId` is unused in this ticket — same deliberate seam as
- * `getEmbeddingClient` above, for E3-T06's usage-guardrail decorator
- * (ADR-16). Do not remove it and do not treat it as dead code.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- sessionId is an intentional seam for E3-T06 (ADR-16), see doc comment above
+// sessionId unused here — same intentional E3-T06 seam as getEmbeddingClient above.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- intentional seam for E3-T06 (ADR-16)
 export function getChatClient(sessionId: string): ChatClient {
   return anthropicChatClient();
 }

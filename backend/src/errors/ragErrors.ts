@@ -1,10 +1,5 @@
-/**
- * Error vocabulary for E3 (RAG engine). Mirrors `documentErrors.ts`: one
- * factory per error the outside world can see, so the code vocabulary can't
- * drift across services. This file grows across the sprint's tickets;
- * E3-T01 adds the embedding-path error, E3-T02 adds the vector-index one,
- * and E3-T03 adds the chat-path one.
- */
+// Error vocabulary for E3 (RAG engine), mirroring documentErrors.ts: one
+// factory per error the outside world can see.
 
 import { AppError } from './AppError.js';
 
@@ -39,12 +34,7 @@ export function embeddingDimensionMismatchError(): AppError {
   );
 }
 
-/**
- * An Anthropic chat call failed outright, timed out, or its stream threw
- * mid-response. The real provider status/body is logged by the caller
- * before this is thrown; nothing provider-shaped is carried in `details`
- * (ADR-5, ADR-14) — same pattern as `embeddingFailedError` above.
- */
+// Same pattern as embeddingFailedError: no provider-shaped data in `details`.
 export function llmFailedError(): AppError {
   return new AppError(502, 'LLM_FAILED', 'Chat completion request failed.');
 }
