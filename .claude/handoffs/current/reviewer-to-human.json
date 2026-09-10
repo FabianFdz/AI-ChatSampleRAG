@@ -3,12 +3,14 @@
   "from": "reviewer",
   "to": "human",
   "status": "approved",
-  "timestamp": "2026-09-10T05:37:41Z",
+  "timestamp": "2026-09-10T06:31:51Z",
   "payload": {
-    "ticket": "E3-T02",
+    "ticket": "E3-T03",
     "prs": [
-      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/21",
-      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/22"
+      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/23",
+      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/24",
+      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/25",
+      "https://github.com/FabianFdz/AI-ChatSampleRAG/pull/26"
     ]
   }
 }
