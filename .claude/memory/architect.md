@@ -63,6 +63,23 @@
   independently). Also check whether adopting the library's own container type
   costs `any` — LangChain's `Document.metadata` is `Record<string, any>`, which
   is enough reason to keep a project-owned type and convert at the boundary.
+- **Making an env var *required* breaks every test, not just the new ticket's.**
+  `config/env.ts` validates at import time and `app.test.ts` reaches it
+  transitively (`app.ts` -> `routes/index.ts` -> `config/env.ts`), so the sprint
+  that adds a required key (`VOYAGE_API_KEY`, `ANTHROPIC_API_KEY`) must also add
+  placeholder values to the `test` script in `package.json`. Prescribe that in
+  the same ticket — never a `NODE_ENV`-conditional branch inside `env.ts`, which
+  would make test and production validate differently.
+- **When a ticket must be retrofitted onto already-merged tickets, design the
+  seam into the earlier ones.** A guardrail/decorator ticket sequenced last only
+  stays a small diff if the earlier tickets already route through one
+  construction site with the needed parameter threaded through (unused for now).
+  Say explicitly in `design.md` that the unused parameter is intentional, or the
+  Reviewer flags it as dead code.
+- **Before writing ADRs, check `git status` for uncommitted ones.** An
+  interrupted run can leave ADRs on disk with no `design.md`, no handoff and
+  `status.json` still `pending`. Read what is there and build on it rather than
+  renumbering over it.
 - **A ticket added mid-sprint gets a second design PR cut from `main`.** Do not
   branch off the in-flight ticket branch (its code would land in the design
   PR) and do not re-open earlier ticket designs. Expect a small `status.json`

@@ -22,7 +22,11 @@ must-have
 ## To settle
 - Response streaming vs. buffered responses?
 - File upload size limits per session?
-- Rate limiting strategy (per session, per IP)?
+- ~~Rate limiting strategy (per session, per IP)?~~ Answered by ADR-16's
+  amendment (sprint 3, 2026-09-09): per **client-id cookie**
+  (`httpOnly`, `SameSite=Strict`, issued at session creation), not per IP —
+  so a session clear doesn't reset a browser's usage budget. Not
+  authentication; see the amendment for what it does and doesn't cover.
 - Authentication needed for MVP?
 
 ---
