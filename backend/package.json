@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.test.json",
-    "test": "NODE_ENV=test LOG_LEVEL=silent node --import tsx --test \"tests/**/*.test.ts\""
+    "test": "NODE_ENV=test LOG_LEVEL=silent VOYAGE_API_KEY=test-placeholder-voyage-key node --import tsx --test \"tests/**/*.test.ts\""
   },
   "dependencies": {
     "@langchain/core": "^1.2.9",
